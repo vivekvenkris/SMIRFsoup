@@ -1,0 +1,11 @@
+eclipse.preferences.version=1
+environment/project/com.nvidia.cuda.ide.on_path.configuration.debug.707237855/DEDISP_DIR/delimiter=\:
+environment/project/com.nvidia.cuda.ide.on_path.configuration.debug.707237855/DEDISP_DIR/operation=append
+environment/project/com.nvidia.cuda.ide.on_path.configuration.debug.707237855/DEDISP_DIR/value=/home/vivek/softwares/dedisp
+environment/project/com.nvidia.cuda.ide.on_path.configuration.debug.707237855/append=true
+environment/project/com.nvidia.cuda.ide.on_path.configuration.debug.707237855/appendContributed=true
+environment/project/com.nvidia.cuda.ide.on_path.configuration.release.2009701380/DEDISP_DIR/delimiter=\:
+environment/project/com.nvidia.cuda.ide.on_path.configuration.release.2009701380/DEDISP_DIR/operation=append
+environment/project/com.nvidia.cuda.ide.on_path.configuration.release.2009701380/DEDISP_DIR/value=/home/vivek/softwares/dedisp
+environment/project/com.nvidia.cuda.ide.on_path.configuration.release.2009701380/append=true
+environment/project/com.nvidia.cuda.ide.on_path.configuration.release.2009701380/appendContributed=true
