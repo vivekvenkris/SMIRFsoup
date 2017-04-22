@@ -1,69 +1,101 @@
 #ifndef SMIRFSOUP_H
 #define SMIRFSOUP_H
 
-#define CENTRAL_BEAM_NUM 177
-#define BEAM_DIR_PREFIX "BEAM_"
-#define ARCHIVES_DIR "/data/mopsr/survey/archives"
-#define FB_DIR "FB"
-#define PATH_SEPERATOR "/"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <assert.h>
+#include <time.h>
+#include <math.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <cstddef>
+#include <iomanip>
+#include <map>
+#include <set>
+#include <cmath>
+#include <csignal>
+
+#include <data_types/timeseries.hpp>
+#include <data_types/fourierseries.hpp>
+#include <data_types/candidates.hpp>
+#include <data_types/filterbank.hpp>
+#include <data_types/candidates.hpp>
+
+#include <utils/exceptions.hpp>
+#include <utils/utils.hpp>
+#include <utils/stats.hpp>
+#include <utils/stopwatch.hpp>
+#include <utils/cmdline.hpp>
+#include <utils/output_stats.hpp>
 
 
-#define POINT_RA 0
-#define POINT_DEC 1
-#define POINT_START_FANBEAM 2
-#define POINT_END_FANBEAM 3
-#define POINT_START_NS 4
-#define POINT_END_NS 5
+#include <vivek/filterbank_def.hpp>
+#include <vivek/filutil.hpp>
+#include <vivek/utilities.hpp>
+#include <vivek/Archiver.h>
+
+#include "DMDispenser.hpp"
+#include "ascii_header.h"
+#include "dada_def.h"
+#include "futils.h"
+#include "strutil.h"
 
 
+class Worker {
+private:
+	DispersionTrials<unsigned char>& trials;
+	DMDispenser& manager;
+	CmdLineOptions& args;
+	AccelerationPlan& acc_plan;
+	unsigned int size;
+	int device;
+	std::map<std::string,Stopwatch> timers;
 
-#define TRAVERSAL_START_INDEX 6
-#define TRAVERSAL_SIZE 5
-#define TRAVERSAL_FANBEAM 0
-#define TRAVERSAL_NS 1
-#define TRAVERSAL_START_SAMPLE 2
-#define TRAVERSAL_NUM_SAMPLES 3
-#define TRAVERSAL_PERCENT 4
-
-class Traversal{
 public:
-	double fanbeam;
-	double ns;
-	long startSample;
-	long numSamples;
-	int percent;
+	CandidateCollection dm_trial_cands;
 
-	Traversal(std::string* traversal){
-		fanbeam = atof(traversal[TRAVERSAL_FANBEAM].c_str());
-		ns = atof(traversal[TRAVERSAL_NS].c_str());
-		startSample = atol(traversal[TRAVERSAL_START_SAMPLE].c_str());
-		numSamples = atol(traversal[TRAVERSAL_NUM_SAMPLES].c_str());
-		percent = atoi(traversal[TRAVERSAL_PERCENT].c_str());
-	}
+	Worker(DispersionTrials<unsigned char>& trials, DMDispenser& manager,
+			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device)
+	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device){}
 
-
+	void start(void);
 };
 
-class UniquePoint{
-public:
-	std::string ra;
-	std::string dec;
-	double startFanbeam;
-	double endFanbeam;
-	double startNS;
-	double endNS;
-	std::vector<Traversal*>* traversals;
 
-	UniquePoint(){
-		traversals = new std::vector<Traversal*>();
-	}
-
-};
+void populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,
+							   std::vector<int>* unique_fbs, int point_index );
 
 
-int stitch_and_dump(std::string utc_dir,  std::string fil_name, vivek::Filterbank* cfb, std::vector<UniquePoint*>* uniqPoints, std::vector<int>* uniqFBs,std::string out_dir, bool verbose);
+
+int peasoup_multi(vivek::Filterbank* filobj,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
+					std::string xml_filename, AccelerationPlan& acc_plan, int pt_num,std::string pt_ra, std::string pt_dec,
+					int candidate_id, std::string out_dir);
 
 
-#define numFBPerServer 44
+
+CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan);
+
+CandidateCollection get_zero_dm_candidates(std::map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args);
+
+
+std::string get_candidate_file_name( std::string dir, int point_idx);
+
+std::string get_fil_file_path( std::string base, std::string utc, int fanbeam);
+
+
 
 #endif
+
+
+
+
+//int stitch_and_dump(std::string utc_dir,  std::string fil_name, std::vector<UniquePoint*>* uniqPoints, std::vector<int>* uniqFBs,std::string out_dir, bool verbose);
+
