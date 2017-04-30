@@ -3,6 +3,7 @@
 #include <vector>
 #include <sstream>
 #include "stdio.h"
+#include <iomanip>
 
 //Lightweight plain old data struct
 //used to combine multiple writes into
@@ -18,6 +19,8 @@ struct CandidatePOD {
 
 struct Candidate {
 public:
+  float ra;
+  float dec;
   float dm;
   int dm_idx;
   float acc;
@@ -34,6 +37,7 @@ public:
   std::vector<float> fold;
   int nbins;
   int nints;
+  int nassoc;
   
   void append(Candidate& other){
     assoc.push_back(other);
@@ -52,19 +56,19 @@ public:
     :dm(dm),dm_idx(dm_idx),acc(acc),nh(nh),
      snr(snr),folded_snr(0.0),freq(freq),
      opt_period(0.0),is_adjacent(false),is_physical(false),
-     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0){}
+     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0){}
   
   Candidate(float dm, int dm_idx, float acc, int nh, float snr, float folded_snr, float freq)
     :dm(dm),dm_idx(dm_idx),acc(acc),nh(nh),snr(snr),
      folded_snr(folded_snr),freq(freq),opt_period(0.0),
      is_adjacent(false),is_physical(false),
-     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0){}
+     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0){}
 
   Candidate()
     :dm(0.0),dm_idx(0.0),acc(0.0),nh(0.0),snr(0.0),
      folded_snr(0.0),freq(0.0),opt_period(0.0),
      is_adjacent(false),is_physical(false),
-     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0){}
+     ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0){}
 
   void set_fold(float* ar, int nbins, int nints){
     int size = nbins*nints;
@@ -89,12 +93,41 @@ public:
 	    nh,snr,folded_snr,is_adjacent,
 	    is_physical,ddm_count_ratio,
 	    ddm_snr_ratio,assoc.size());
-//    for (int ii=0;ii<assoc.size();ii++){
-//      assoc[ii].print(fo);
-//    }
+    for (int ii=0;ii<assoc.size();ii++){
+      assoc[ii].print(fo);
+    }
   }
 
+
+
+  void print_cand_file(FILE* fo, int index, std::string ra, std::string dec){
+	 std::stringstream source_name;
+	 source_name << "SMIRF" << "_" << std::setfill('0') << std::setw(3) << index;
+  	 fprintf(fo,"%s %s %s %.15f %.2f %.2f %.1f\n",
+  		    source_name.str().c_str(),ra.c_str(),dec.c_str(),opt_period,dm,acc,snr);
+
+  }
+
+	float getDec() const {
+		return dec;
+	}
+
+	void setDec(float dec) {
+		this->dec = dec;
+	}
+
+	float getRa() const {
+		return ra;
+	}
+
+	void setRa(float ra) {
+		this->ra = ra;
+	}
+
+
 };
+
+
 
 class CandidateCollection {
 public:
@@ -117,6 +150,15 @@ public:
   void print(FILE* fo=stdout){
     for (int ii=0;ii<cands.size();ii++)
       cands[ii].print(fo);
+  }
+
+  void print_cand_file(FILE* fo, std::string ra, std::string dec, int candidate_id){
+
+	  if(candidate_id ==1) fprintf(fo,"SOURCE RA DEC PERIOD DM ACC SNR\n");
+
+	  for (int ii=0;ii<cands.size();ii++)
+	      cands[ii].print_cand_file(fo,candidate_id+ii,ra,dec);
+
   }
 
   void generate_candidate_binaries(std::string output_directory="./") {

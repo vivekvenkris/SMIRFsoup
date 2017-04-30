@@ -68,7 +68,7 @@ public:
 	int unload_filterbank();
 
 
-	void load_all_data();
+	int load_all_data();
 	double get_mean();
 	double get_rms();
 
@@ -78,6 +78,7 @@ public:
 	HeaderParamBase* get_header_param(std::string key);
 	HeaderParamBase* get_header_param(const char* key);
 	double get_double_value_for_key(std::string key);
+	void remove_header_param(const char* key);
 
 	template <typename T>  inline T get_value_for_key(const char* key){
 		HeaderParamBase* base = get_header_param(key);
@@ -90,6 +91,24 @@ public:
 			static_cast<HeaderParam< T> * > (base)->value = value;
 		}
 	}
+
+
+	static int get_zero_dm_time_series(Filterbank* f, unsigned char* timeseries){
+
+		for(int i=0; i< f->nsamps; i++){
+			int add;
+			for(int j=0; j< f->nchans; j++ ){
+				add += f->data[i* f->nchans  +  j];
+			}
+			timeseries[i] = (unsigned char) ( add ) ;
+		}
+
+		return EXIT_SUCCESS;
+
+	}
+
+
+
 	static int copy_header(Filterbank* from, Filterbank* to, bool verbose){
 
 		if(to->mode!=FILWRITE){
@@ -138,7 +157,6 @@ public:
 		to->fch1 = to->get_value_for_key<double>(FCH1);
 		to->foff = to->get_value_for_key<double>(FOFF);
 		to->header_bytes = from->header_bytes;
-		std::cerr<< "nsamp:" <<from->file_name << " "<< from->get_value_for_key<long>(NSAMPLES)  << " " << to->file_name << " " << to->get_value_for_key<long>(NSAMPLES) <<std::endl;
 		return EXIT_SUCCESS;
 
 	}
@@ -170,6 +188,7 @@ public:
 		else
 			return fch1-foff*nchans/2;
 	}
+
 
 	const std::vector<HeaderParamBase*>& getHeaderParams() const {
 		return header_params;

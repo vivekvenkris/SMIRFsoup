@@ -59,9 +59,6 @@ public:
 		this->value = param->value;
 		this->inheader = param->inheader;
 
-		std::cerr << " setting: " << this->key << " " << this->dtype << " " << this->value <<std::endl;
-
-
 	}
 
 	inline ~HeaderParam(){}

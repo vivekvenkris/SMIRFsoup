@@ -1,4 +1,8 @@
 #pragma once
+
+#ifndef _KERNELS_H_
+#define _KERNELS_H_
+
 #include <thrust/system/cuda/vector.h>
 #include <thrust/system/cuda/execution_policy.h>
 #include <thrust/device_vector.h>
@@ -319,3 +323,4 @@ template <class X, class Y>
 void device_conversion(X*, Y*, unsigned int,
 		       unsigned int, unsigned int);
 
+#endif

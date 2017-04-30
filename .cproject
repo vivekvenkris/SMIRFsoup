@@ -41,6 +41,7 @@
 								<option id="nvcc.compiler.disableWarnings.1578151859" name="Inhibit all warning messages (-w)" superClass="nvcc.compiler.disableWarnings" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.ftz.868223151" name="Flush denormal values to zero in single-precision FP operations (-ftz)" superClass="nvcc.compiler.ftz" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.usefastmath.1208826811" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
+								<option id="com.nvidia.cuda.ide.build.option1.2110958208" superClass="com.nvidia.cuda.ide.build.option1" value="/opt/gcc-4.9.4/bin" valueType="string"/>
 								<inputType id="nvcc.compiler.input.cu.345066597" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.486929519" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.106656160" superClass="nvcc.compiler.input.c"/>
@@ -72,6 +73,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="include/network"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
@@ -80,6 +82,12 @@
 				<executable devicelink="false">
 					<sass major="5" minor="2"/>
 					<ptx major="5" minor="2"/>
+					<ptx major="6" minor="0"/>
+					<sass major="6" minor="0"/>
+					<ptx major="3" minor="5"/>
+					<sass major="3" minor="5"/>
+					<ptx major="5" minor="3"/>
+					<sass major="5" minor="3"/>
 				</executable>
 				<editor-arch major="5" minor="2"/>
 			</storageModule>
@@ -129,6 +137,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="include/network"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>

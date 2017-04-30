@@ -16,14 +16,20 @@
 
 class OutputFileWriter {
   XML::Element root;
-
+  std::string file_name;
 public:
   OutputFileWriter()
-    :root("peasoup_search"){}
+     :root("peasoup_search"){
+	  file_name = "test.xml";
+  }
+  OutputFileWriter(std::string file_name)
+    :file_name(file_name),root("peasoup_search"){}
 
   std::string to_string(void){
     return root.to_string(true);
   }
+
+
 
   void to_file(std::string filename){
     std::ofstream outfile;
@@ -34,6 +40,10 @@ public:
     outfile.close();
   }
   
+  void to_file(){
+ 	  to_file(this->file_name);
+   }
+
   void add_header(std::string filename){
     std::ifstream infile;
     SigprocHeader hdr;
@@ -162,8 +172,7 @@ public:
     root.append(acc_trials);
   }
 
-  void add_candidates(std::vector<Candidate>& candidates, 
-		      std::map<unsigned,long int> byte_map, int pt_num, std::string pt_ra, std::string pt_dec)
+  void add_candidates(std::vector<Candidate>& candidates, int pt_num, std::string pt_ra, std::string pt_dec)
   {
     XML::Element cands("point");
     cands.append(XML::Element("num",pt_num));
@@ -184,7 +193,6 @@ public:
       cand.append(XML::Element("ddm_count_ratio",candidates[ii].ddm_count_ratio));
       cand.append(XML::Element("ddm_snr_ratio",candidates[ii].ddm_snr_ratio));
       cand.append(XML::Element("nassoc",candidates[ii].count_assoc()));
-      cand.append(XML::Element("byte_offset",byte_map[ii]));
       cands.append(cand);
     }
     root.append(cands);

@@ -10,6 +10,7 @@
 
 #define FILREAD "rb"
 #define FILWRITE "wb"
+#define VIRTUALFIL ""
 
 const char* const HEADER_START = "HEADER_START";
 const char* const HEADER_END = "HEADER_END";
@@ -35,6 +36,7 @@ const char* const DOUBLE = "double";
 const char* const STRING = "string";
 const char* const LONG = "long";
 const char* const NULL_STR = "null";
+
 
 
 

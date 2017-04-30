@@ -36,6 +36,18 @@
 #include <utils/cmdline.hpp>
 #include <utils/output_stats.hpp>
 
+#include <transforms/dedisperser.hpp>
+#include <transforms/resampler.hpp>
+#include <transforms/folder.hpp>
+#include <transforms/ffter.hpp>
+#include <transforms/dereddener.hpp>
+#include <transforms/spectrumformer.hpp>
+#include <transforms/birdiezapper.hpp>
+#include <transforms/peakfinder.hpp>
+#include <transforms/distiller.hpp>
+#include <transforms/harmonicfolder.hpp>
+#include <transforms/scorer.hpp>
+
 
 #include <vivek/filterbank_def.hpp>
 #include <vivek/filutil.hpp>
@@ -43,11 +55,15 @@
 #include <vivek/Archiver.h>
 
 #include "DMDispenser.hpp"
+#include "Coincidencer.hpp"
 #include "ascii_header.h"
 #include "dada_def.h"
 #include "futils.h"
 #include "strutil.h"
 
+volatile int max_fanbeam_traversal = 0;
+
+volatile int freq_bin_width = 3; //(in 1/ (size* tsamp) units)
 
 class Worker {
 private:
@@ -55,6 +71,7 @@ private:
 	DMDispenser& manager;
 	CmdLineOptions& args;
 	AccelerationPlan& acc_plan;
+	Zapper* bzap;
 	unsigned int size;
 	int device;
 	std::map<std::string,Stopwatch> timers;
@@ -63,32 +80,34 @@ public:
 	CandidateCollection dm_trial_cands;
 
 	Worker(DispersionTrials<unsigned char>& trials, DMDispenser& manager,
-			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device)
-	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device){}
+			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device,Zapper* bzap)
+	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device),bzap(bzap){}
 
 	void start(void);
 };
 
 
-void populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,
-							   std::vector<int>* unique_fbs, int point_index );
+int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,
+		std::vector<int>* unique_fbs, int point_index );
 
 
 
-int peasoup_multi(vivek::Filterbank* filobj,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-					std::string xml_filename, AccelerationPlan& acc_plan, int pt_num,std::string pt_ra, std::string pt_dec,
-					int candidate_id, std::string out_dir);
+int peasoup_multi(vivek::Filterbank* filobj, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
+					AccelerationPlan& acc_plan,Zapper* bzap, int pt_num,std::string pt_ra, std::string pt_dec,
+					int candidate_id,  CandidateCollection* all_cands);
 
 
 
-CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan);
+CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
+							Zapper* bzap);
 
 CandidateCollection get_zero_dm_candidates(std::map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args);
 
 
-std::string get_candidate_file_name( std::string dir, int point_idx);
+std::string get_candidate_file_name( std::string dir, int point_idx, std::string host);
 
 std::string get_fil_file_path( std::string base, std::string utc, int fanbeam);
+
 
 
 

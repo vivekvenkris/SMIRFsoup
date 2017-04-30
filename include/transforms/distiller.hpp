@@ -196,6 +196,19 @@ public:
     :BaseDistiller(keep_related),tolerance(tolerance){}
 };
 
+
+//class SpatialDistiller: public BaseDistiller{
+//private:
+//	void condition(std::vector<Candidate>& cands,int idx)
+//	  {
+//
+//	  }
+//public:
+//	SpatialDistiller(bool keep_related):BaseDistiller(keep_related){}
+//};
+
+
+
 class CandidateTester {
 private:
   float cfreq;

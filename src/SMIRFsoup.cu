@@ -28,190 +28,38 @@
 #include "SMIRFsoup.hpp"
 #include "SMIRFdef.hpp"
 #include "ConfigManager.hpp"
+#include "ShutdownManager.hpp"
+
+#include "Rsyncer.hpp"
 
 
 
 using namespace std;
 
-volatile bool shutdown = false;
-volatile bool working  = false;
-
-void shutdown_manager(int signal){
-
-	if( signal ==SIGINT ){
-
-		shutdown = true;
-		while(working) usleep(100 * 1000 );
-
-	}
-
-	else if( signal == SIGTERM ) {
-
-		/* introduce some grace here */
-
-		exit(0);
-
-	}
-
-}
-
-void usage ()
-{
-	fprintf(stdout, "SMIRFsoup [options] UTC NFB UNIQ.PTS\n"
-			" Given a directory DIR which is a fan beam observation, it de disperses, stitches and peasoups it.\n"
-			" -h              print this help text\n"
-			" -v              verbose output\n"
-			" -D              dump stitched FB and return\n"
-			" -T              transfer stitched filterbank to Shared memory and return"
-			" -k              shared memory key for -T option"
-			" -O <dir>        output directory \n"
-			" -s <suffix>     output suffix ( for <utc>.xml ) \n "
-			" -i <UTC>   	  input UTC \n"
-			" -A <dir>        directory of Archives. \n"
-			" -S <dir>        directory of Smirf. \n"
-			" -l <line> 	  line number in uniq.pts file to process \n"
-			" -c <file>       shortlisted candidate file to be used with the -T option."
-			" -C <dir>        directory of the shortlisted candidate file."
-			" -r <file>       RF birdies file \n"
-			" -u <file>       uniq.pts file \n"
-			" -U <dir>        uniq.pts file parent directory \n"
-	);
-}
-
-
-
-
-
 
 int main(int argc, char **argv) {
 
-
-	string smirf_base = SMIRF_BASE;
-	string archives_base = ARCHIVES_BASE;
-
-	string candidates_dir = "";
-	string candidates_file = "";
-
-	string uniq_points_dir = "";
-	string uniq_points_file = "uniq.points";
-
-	string out_dir = ".";
-	string out_suffix = "";
-
-	key_t  out_key = -1;
-
-	string utc = "";
-	string rf_birdies = "";
 
 	vector<UniquePoint*>* unique_points = new vector<UniquePoint*>();
 	vector<int>* unique_fbs = new vector<int>();
 	vector<string>* string_points = new vector<string>();
 
-	float dm_start = 0;
-	float dm_end = 2000;
-	float dm_tol = 1.05;
-	float dm_pulse_width=40; //ms
-
-	float acc_start         = 0;
-	float acc_end           = 0;
-	float acc_tol           = 1.25;
-	float acc_pulse_width   = 64;
-
-	CmdLineOptions args;
-	if (!read_cmdline_options(args,argc,argv))
-	    ErrorChecker::throw_error("Failed to parse command line arguments.");
-
-	int arg = 0;
-
-	char verbose = 1;
-
-	bool dump_mode = false;
-
-	bool transfer_mode = false;
-
-
-	int point_num = -1;
-
-
-	while ((arg = getopt(argc, argv, "A:Dhi:l:O:r:S:Tu:U:v")) != -1)
-	{
-		switch (arg)
-		{
-		case 'A':
-			archives_base =  string(optarg);
-			break;
-
-		case 'D':
-			cerr<< "setting to dump mode." <<endl;
-			dump_mode = true;
-			break;
-
-		case 'T':
-			cerr<< "setting to transfer mode." <<endl;
-			transfer_mode = true;
-			break;
-
-		case 'h':
-			usage ();
-			return 0;
-
-		case 'i':
-			utc = string(optarg);
-			break;
-
-		case 'l':
-			point_num = atoi(optarg);
-			break;
-
-		case 'O':
-			out_dir= string(optarg);
-			break;
-
-		case 'r':
-			rf_birdies = string(optarg);
-			break;
-
-		case 'S':
-			smirf_base = string(optarg);
-			break;
-		case 's':
-			out_suffix= string(optarg);
-			break;
-
-		case 'u':
-			uniq_points_file =  string(optarg);
-			break;
-
-		case 'U':
-			uniq_points_dir =  string(optarg);
-			break;
-
-		case 'k': {
-			std::stringstream temp;
-			temp << std::hex << string(optarg);
-			temp >> out_key;
-			cerr << "using key: " << temp.str() << " (" << out_key << ") " << endl;
-			break;
-		}
-
-		case 'v':
-			verbose++;
-			break;
-
-
-		default:
-			usage ();
-			return 0;
-		}
-	}
-
 	/**
-	 *  Try to load config files to know where filterbanks are. Abort if not found.
+	 * Read all command line arguments
 	 */
 
-	if(ConfigManager::load_configs() == EXIT_FAILURE) {
+	CmdLineOptions args;
+	if (read_cmdline_options(args,argc,argv) == EXIT_FAILURE)
+		ErrorChecker::throw_error("Failed to parse command line arguments.");
 
-		cerr << "Problem loading configs. Aborting." << endl;
+
+	/**
+	 *  Try to load configuration files to know where filter banks are. Abort if not found.
+	 */
+
+	if(ConfigManager::load_configs(args.host) == EXIT_FAILURE) {
+
+		cerr << "Problem loading configuration files. Aborting." << endl;
 		return EXIT_FAILURE;
 
 	}
@@ -220,141 +68,235 @@ int main(int argc, char **argv) {
 	 *  define shutdown hooks
 	 */
 
-	std::signal(SIGINT, shutdown_manager);
+	//std::signal(SIGINT, ShutdownManager::manage_shutdown);
 
 
 	/**
 	 * Get and populate uniq points file.
 	 */
 	stringstream smirf_utc_dir_stream;
-	smirf_utc_dir_stream << smirf_base << PATH_SEPERATOR <<utc;
+	smirf_utc_dir_stream << args.smirf_base << PATH_SEPERATOR <<args.utc;
 
-	if(uniq_points_dir == "") uniq_points_dir = smirf_utc_dir_stream.str();
-
+	if(args.uniq_points_dir == "") args.uniq_points_dir = smirf_utc_dir_stream.str();
 
 	stringstream abs_uniq_points_file_name;
-	abs_uniq_points_file_name << uniq_points_dir<< PATH_SEPERATOR <<uniq_points_file;
+	abs_uniq_points_file_name << args.uniq_points_dir<< PATH_SEPERATOR <<args.uniq_points_file;
 
-	populate_unique_points(abs_uniq_points_file_name.str(),unique_points, string_points, unique_fbs,point_num);
+	int result = populate_unique_points(abs_uniq_points_file_name.str(),unique_points, string_points, unique_fbs,args.point_num);
 
+	if(result == EXIT_FAILURE) 	ErrorChecker::throw_error("Problem reading unique points file. Aborting now.");
+
+
+	if(ConfigManager::this_host() == ConfigManager::edge_node()){
+
+		vector<Rsyncer> rsyncers;
+
+		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_fb_map() ){
+			string node = node_bp_map_pair.first;
+
+			if(node == ConfigManager::edge_node() ) continue;
+
+			Rsyncer rsyncer(node);
+
+
+			for(int fb : *unique_fbs) {
+
+				for(pair<int, pair<int,int> > bp_fb_pair: node_bp_map_pair.second) {
+
+					int min = bp_fb_pair.second.first;
+					int max =  bp_fb_pair.second.second;
+					if(fb >= min && fb<=max) {
+						string path = ConfigManager::get_fil_file_path(args.archives_base,args.utc, fb);
+						rsyncer.append(path);
+					}
+
+				}
+
+			}
+			rsyncers.push_back(rsyncer);
+
+		}
+
+		for(Rsyncer r: rsyncers) cerr << endl << r.getNode() << " ---- " << r.get_rsync_string() << endl;
+
+		for(Rsyncer r: rsyncers) { r.rsync(); pthread_join(r.getRsyncThread(),NULL); }
+		//for(Rsyncer r: rsyncers)  pthread_join(r.getRsyncThread(),NULL);
+
+	}
 
 	/**
 	 * If dump or transfer mode, do and return. Do not peasoup.
 	 */
-	if(dump_mode || transfer_mode){
+	if(args.dump_mode || args.transfer_mode){
 
-		Stitcher stitcher(utc,out_dir,verbose);
+		Stitcher stitcher(args);
 
-		if(dump_mode) {
+		if(args.dump_mode) {
+
+			if(args.verbose) cerr <<  __func__ << ": In dump mode." <<endl;
 
 			stitcher.stitch_and_dump(unique_points, unique_fbs);
 
 		}
-		if(transfer_mode) {
+		else if(args.transfer_mode) {
 
-			if(out_key < 0 ) {
-				cerr <<  " Need a valid shared memory key specify using the -k Aborting." << endl;
+
+			if(args.verbose) cerr <<  __func__ << ": In transfer mode." <<endl;
+
+			if(args.out_key < 0 ) {
+
+				cerr <<  __func__ << ": Need a valid shared memory key. Specify using the -k option. Aborting now." << endl;
+				return EXIT_FAILURE;
+
 			}
-			if(point_num >=0) {
-				UniquePoint* point = unique_points->at(point_num);
-				// to complete.
+
+			stringstream candidate_file_stream;
+			candidate_file_stream << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
+
+			string candidate_file = candidate_file_stream.str();
+
+			if(!file_exists(candidate_file)) {
+
+				cerr << __func__ << ": Candidate file: '" << candidate_file << "' is not found. Aborting now." << endl;
+				exit(EXIT_FAILURE);
 
 			}
-			UniquePoint* point = unique_points->at(point_num);
-			vivek::Filterbank* stitched_filterbank = stitcher.stitch(point);
 
-			vivek::Archiver a(out_key);
-			a.transfer_fil_to_DADA_buffer(stitched_filterbank);
+
+			if(args.point_num >=0) {
+
+				vector<UniquePoint*> points;
+				points.push_back(unique_points->at(args.point_num));
+
+				stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, args.out_dir);
+
+			}
+
+			stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, args.out_dir);
+
 
 		}
 		return EXIT_SUCCESS;
 	}
 
 
-
-	/**
-	 * Arguments for peasoup optimized for SMIRF.
-	 */
-
-	args.killfilename      = "";
-	args.zapfilename = "";
-	args.max_num_threads   = 1;
-	args.size              =  0;
-	args.acc_start = acc_start;
-	args.acc_end = acc_end;
-	args.acc_tol = acc_tol;
-	args.acc_pulse_width = acc_pulse_width;
-	args.dm_start = dm_start;
-	args.dm_end = dm_end;
-	args.dm_tol = dm_tol;
-	args.dm_pulse_width = dm_pulse_width;
-	args.boundary_5_freq   = 0.05;
-	args.boundary_25_freq  = 0.5;
-	args.nharmonics        = 4;
-	args.min_snr           = 9;
-	args.min_freq          = 0.1 ;
-	args.max_freq          = 1100;
-	args.freq_tol          = 0.1;
-	args.verbose           = verbose;
-	args.progress_bar      = true;
-	args.npdmp             = 500;
-	args.limit             = 500;
-	args.max_harm 		   = 4;
-
-
-	/**
-	 * Use the first filter bank to extract header information and create DM and Acceleration trial list that can
-	 * be reused for all stitches.
-	 */
-
-	string first_fb_path = ConfigManager::get_fil_file_path(archives_base,utc,unique_fbs->at(0));
-
-	vivek::Filterbank* ffb = new vivek::Filterbank(first_fb_path,FILREAD,verbose);
-
-	long data_bytes = ffb->data_bytes;
-	int nsamples = ffb->get_nsamps();
-	double tsamp = ffb->get_tsamp();
-	double cfreq = ffb->get_cfreq();
-	double foff =  ffb->get_foff();
-	unsigned int size = Utils::prev_power_of_two(ffb->get_nsamps());
-
-
-	vector<float> acc_list;
-	AccelerationPlan acc_plan(acc_start, acc_end, acc_tol, acc_pulse_width, size, tsamp, cfreq, foff);
-	acc_plan.generate_accel_list(0.0,acc_list);
-
-	vector<float> dm_list;
-	Dedisperser ffb_dedisperser(*ffb,1);
-	ffb_dedisperser.generate_dm_list(dm_start,dm_end,dm_pulse_width,dm_tol);
-	dm_list = ffb_dedisperser.get_dm_list();
-
 	/**
 	 * Load all fanbeams to RAM.
 	 */
+
+
+	cerr << "Loading all fanbeams to RAM" << std::endl;
 
 	std::map<int,vivek::Filterbank*> fanbeams;
 
 	for( vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
 		int fb = (int)*(fb_iterator);
 
-		string fb_abs_path = ConfigManager::get_fil_file_path(archives_base,utc,fb);
+		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
 
-		vivek::Filterbank* f = new vivek::Filterbank(fb_abs_path, FILREAD, verbose);
+		if(fb_abs_path.empty()) {
+			cerr<< "Problem loading fb: " <<  fb << "fil file not found. Aborting now.";
+			return EXIT_FAILURE;
+		}
+
+		vivek::Filterbank* f = new vivek::Filterbank(fb_abs_path, FILREAD, args.verbose);
 		f->load_all_data();
-
-		if(verbose) cerr<< "mean: " << f->get_mean() << "  rms:" << f->get_rms() <<endl;
 
 		fanbeams[fb] = f;
 
 	}
 
-	std::cerr<< "loaded all FB" << fanbeams.size()<<std::endl;
+	cerr<< fanbeams.size() << " Fanbeams loaded" << endl;
+
+	/**
+	 * Use the first filterbank to get common header details.
+	 */
+
+
+	vivek::Filterbank* ffb = fanbeams.begin() -> second ;
+
+	long data_bytes = ffb -> data_bytes;
+	int nsamples = ffb -> get_nsamps();
+	double tsamp = ffb -> get_tsamp();
+	double cfreq = ffb -> get_cfreq();
+	double foff =  ffb -> get_foff();
+
+	if(args.size ==0) args.size = Utils::prev_power_of_two(ffb->get_nsamps());
+
+
 
 	/**
 	 *  Get zero DM candidates that happen on all beams and use this as a birdies list.
 	 */
 
-	CandidateCollection zero_dm_candidates = get_zero_dm_candidates(&fanbeams,args);
+	Zapper* bzap = NULL;
+
+	//std::cerr <<  "Main inga:  " << (bzap == NULL ) << std::endl;
+
+
+	if ( !args.zapfilename.empty() ) {
+
+		cerr << "Using Zap file: " << args.zapfilename << endl;
+
+		bzap = new Zapper(args.zapfilename);
+	}
+
+	if(args.dynamic_birdies) {
+
+		cerr << "Generating dynamic birdies list" << endl;
+
+		CandidateCollection zero_dm_candidates = get_zero_dm_candidates(&fanbeams,args);
+
+		map<float,float> zap_map;
+
+
+		float bin_width = freq_bin_width/(args.size * ffb->tsamp);
+
+		for(int i=0; i< zero_dm_candidates.cands.size(); i++){
+
+			Candidate c = zero_dm_candidates.cands[i];
+
+			cerr << "Birdie '" << i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' W: '" << bin_width << "' nfb: " <<
+					c.assoc.size()<< endl;
+
+			if(c.assoc.size() > max_fanbeam_traversal){
+
+				zap_map.insert( map<float,float>::value_type(c.freq,bin_width));
+
+			}
+
+		}
+
+
+		if(! zap_map.empty()) {
+
+			if(bzap) bzap->append_from_map(&zap_map);
+			else 	 bzap = new Zapper(&zap_map);
+
+		}
+
+		if(args.verbose) cerr << "Found "<< zap_map.size() << " birdies" << endl;
+
+	}
+
+
+	/**
+	 * Stitch and peasouping section
+	 * ******************************
+	 * Use the first filter bank to extract header information and create DM and Acceleration trial list that can
+	 * be reused for all stitches.
+	 */
+
+
+
+	vector<float> acc_list;
+	AccelerationPlan acc_plan(args.acc_start, args.acc_end, args.acc_tol, args.acc_pulse_width, args.size, tsamp, cfreq, foff);
+	acc_plan.generate_accel_list(0.0,acc_list);
+
+	vector<float> dm_list;
+	Dedisperser ffb_dedisperser(*ffb,1);
+	ffb_dedisperser.generate_dm_list(args.dm_start,args.dm_end,args.dm_pulse_width,args.dm_tol);
+	dm_list = ffb_dedisperser.get_dm_list();
 
 
 	/**
@@ -362,17 +304,18 @@ int main(int argc, char **argv) {
 	 * parameters for the xml output file.
 	 *
 	 */
+	stringstream xml_filename;
+	xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
 
-	OutputFileWriter stats;
+	OutputFileWriter stats(xml_filename.str());
 	stats.add_misc_info();
 	stats.add_search_parameters(args);
 	stats.add_dm_list(dm_list);
 	stats.add_acc_list(acc_list);
 
-	stringstream xml_filename;
-	xml_filename <<  out_dir << PATH_SEPERATOR <<  utc << ".xml";
 
-	if(out_suffix !="") xml_filename<<"."<<out_suffix;
+
+	if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
 
 	vector<int> device_idxs;
 	for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
@@ -407,12 +350,15 @@ int main(int argc, char **argv) {
 	size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
 	int reduced_nsamples = nsamples - max_delay;
 
+	CandidateCollection* all_cands = new CandidateCollection();
 
-	int point_index=1;
+	int point_index= 1;
 	int candidate_id = 1;
 
 	for(vector<UniquePoint*>::iterator it = unique_points->begin(); it!=unique_points->end();++it){
 		UniquePoint* point = *it;
+
+		cerr<< "\r Processing point " <<  point_index << " / " <<  unique_points->size();
 
 		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
 
@@ -447,54 +393,93 @@ int main(int argc, char **argv) {
 
 		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
-		candidate_id += peasoup_multi(ffb,args,trials,stats,xml_filename.str(),acc_plan,point_index, point->ra, point->dec, candidate_id, out_dir );
+		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point->ra, point->dec, candidate_id, all_cands );
 
+		if(cand_size == -1) {
+			cerr << "Problem peasouping line: " << point_index << endl;
+			return EXIT_FAILURE;
+		}
+
+		candidate_id += cand_size;
 
 		delete[] data;
 		point_index++;
 
 
 	}
+
+	for(int i=0; i< all_cands->cands.size(); i++ ){
+
+		Candidate c = all_cands->cands[i];
+
+		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
+	}
+
+	DMDistiller dm_still(args.freq_tol,true);
+
+	CandidateCollection distilled_cands;
+	distilled_cands.cands = dm_still.distill(all_cands->cands);
+
+
+	for(int i=0; i< distilled_cands.cands.size(); i++ ){
+
+		Candidate c = distilled_cands.cands[i];
+
+		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "DM: '" << c.dm <<"' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
+	}
+
+
+	cerr << "Attempting to call coincidencer" << endl;
+
+	Coincidencer* coincidencer = new Coincidencer(all_cands,args.host);
+
+	coincidencer->gather_all_candidates();
+
+	cerr << endl << " Done." << endl;
 }
 
 
 
 
 int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-		string xml_filename, AccelerationPlan& acc_plan, int pt_num, string pt_ra, string pt_dec, int candidate_id, string out_dir){
+		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, string pt_ra, string pt_dec, int candidate_id, CandidateCollection* all_cands){
 
-	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan);
+	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap);
 
-	string name = get_candidate_file_name(out_dir,pt_num);
+	string name = get_candidate_file_name(args.out_dir, -1, args.host );
+
 
 	stats.add_candidates(dm_cands.cands,pt_num,pt_ra,pt_dec);
 
-	FILE* fp = fopen(name.c_str(),"w");
+	FILE* fp;
 
-
+	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
+		cerr << "Problem opening candidate file for writing / appending." << endl;
+	}
 
 	dm_cands.print_cand_file(fp,pt_ra.c_str(),pt_dec.c_str(), candidate_id);
 
 	fclose(fp);
 
-	stats.to_file(xml_filename);
+	stats.to_file();
+
+	all_cands->append(dm_cands);
 
 	return dm_cands.cands.size();
 
 
 }
 
-CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan) {
+CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
+		Zapper* bzap) {
 
 	CandidateCollection dm_cands;
 
 	int nthreads = 1;
 
-	unsigned int size = ( args.size==0 )? Utils::prev_power_of_two(fil->get_nsamps()): args.size;
-
 	DMDispenser dispenser(trials);
 
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,size,0);
+	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
 
@@ -527,50 +512,108 @@ CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, Dispers
 
 CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args){
 
-	vivek::Filterbank* ffb = fanbeams->begin()->second;
+	vivek::Filterbank* ffb = fanbeams->begin() -> second;
 
-	long data_bytes = ffb->data_bytes;
-	int nsamples = ffb->get_nsamps();
-	double tsamp = ffb->get_tsamp();
-	double cfreq = ffb->get_cfreq();
-	double foff =  ffb->get_foff();
+	long data_bytes = ffb -> data_bytes;
+	int nsamples = ffb -> get_nsamps();
+	double tsamp = ffb -> get_tsamp();
+	double cfreq = ffb -> get_cfreq();
+	double foff =  ffb -> get_foff();
 	unsigned int size = Utils::prev_power_of_two(ffb->get_nsamps());
 
-	vector<float> zero_dm_list;
-	zero_dm_list.push_back(0.0);
 
-	vector<float> zero_acc_list;
-	AccelerationPlan zero_dm_acc_plan(0, 0, 0, 0, size, tsamp, cfreq, foff);
-	zero_dm_acc_plan.generate_accel_list(0.0,zero_acc_list);
+	CandidateCollection dm_cands;
 
-	CandidateCollection all_cands;
+	cudaSetDevice(args.gpu_device);
 
-	for (std::map<int,vivek::Filterbank*>::iterator it=fanbeams->begin(); it!=fanbeams->end(); ++it){
+	CuFFTerR2C r2cfft(size);
+	CuFFTerC2R c2rfft(size);
+
+	for (map<int,vivek::Filterbank*>::iterator it=fanbeams->begin(); it!=fanbeams->end(); ++it){
 
 		vivek::Filterbank* f  = it->second;
 
 		Dedisperser zero_dm_dedisperser(*f,1);
-		zero_dm_dedisperser.set_dm_list(zero_dm_list);
+		zero_dm_dedisperser.generate_dm_list(0,0,0,0);
 
-		PUSH_NVTX_RANGE("Dedisperse",3)
+		PUSH_NVTX_RANGE("Dedisperse zero DM",3)
 
 		DispersionTrials<unsigned char> trials = zero_dm_dedisperser.dedisperse();
 
 		POP_NVTX_RANGE
 
-		CandidateCollection dm_cands  = peasoup(f,args,trials,zero_dm_acc_plan);
-		all_cands.append(dm_cands.cands);
+
+		DedispersedTimeSeries<unsigned char> tim;
+		trials.get_idx(0,tim);
+
+		ReusableDeviceTimeSeries<float,unsigned char> d_tim(size);
+		d_tim.copy_from_host(tim);
+
+		float tobs = size*f->tsamp;
+		float bin_width = 1.0/tobs;
+
+		DeviceFourierSeries<cufftComplex> d_fseries(size/2+1,bin_width);
+		r2cfft.execute(d_tim.get_data(),d_fseries.get_data());
+
+		DevicePowerSpectrum<float> pspec(d_fseries);
+
+		SpectrumFormer former;
+		former.form(d_fseries,pspec);
+
+		Dereddener rednoise(size/2+1);
+		rednoise.calculate_median(pspec);
+		rednoise.deredden(d_fseries);
+		former.form_interpolated(d_fseries,pspec);
+
+		float mean,std,rms;
+		stats::stats<float>(pspec.get_data(),size/2+1,&mean,&rms,&std);
+
+		c2rfft.execute(d_fseries.get_data(),d_tim.get_data());
+
+		r2cfft.execute(d_tim.get_data(),d_fseries.get_data());
+		former.form_interpolated(d_fseries,pspec);
+
+		stats::normalise(pspec.get_data(),mean*size,std*size,size/2+1);
+
+		HarmonicSums<float> sums(pspec,args.nharmonics);
+		HarmonicFolder harm_folder(sums);
+		harm_folder.fold(pspec);
+
+		SpectrumCandidates trial_cands(tim.get_dm(),0,0.0);
+
+		PeakFinder cand_finder(args.min_snr,args.min_freq,args.max_freq,size);
+		cand_finder.find_candidates(pspec,trial_cands);
+		cand_finder.find_candidates(sums,trial_cands);
+
+		HarmonicDistiller harm_finder(args.freq_tol,args.max_harm,false);
+		dm_cands.append(harm_finder.distill(trial_cands.cands));
 
 	}
-	return all_cands;
+	POP_NVTX_RANGE
 
+	DMDistiller dm_still(args.freq_tol,true);
+
+	CandidateCollection distilled_cands;
+	distilled_cands.cands = dm_still.distill(dm_cands.cands);
+
+	return distilled_cands;
 }
 
-void populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,  std::vector<int>* unique_fbs, int point_index ){
+
+int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,  std::vector<int>* unique_fbs, int point_index ){
+
+	if( !file_exists(abs_file_name) ){
+
+		cerr << __func__ << ": Unique points file: '" << abs_file_name << "' does not exist." << endl;
+		return EXIT_FAILURE;
+	}
 
 	std::string line;
 	std::ifstream unique_points_file_stream(abs_file_name.c_str());
 	int line_number = 0;
+
+	max_fanbeam_traversal = 0;
+
 	if(unique_points_file_stream.is_open()){
 		while(getline(unique_points_file_stream, line)){
 			line_number++;
@@ -590,7 +633,6 @@ void populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>
 			point->startNS =atof(vstrings.at(POINT_START_NS).c_str());
 			point->endNS = atof(vstrings.at(POINT_END_NS).c_str());
 
-
 			for(std::vector<std::string>::size_type i = TRAVERSAL_START_INDEX ; i != vstrings.size(); i = i + TRAVERSAL_SIZE) {
 
 				std::string value = vstrings[i];
@@ -598,10 +640,15 @@ void populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>
 				point->traversals->push_back(t);
 				if(std::find(unique_fbs->begin(), unique_fbs->end(),(int)t->fanbeam)== unique_fbs->end()) unique_fbs->push_back((int)t->fanbeam);
 			}
+
+			if(point->traversals->size() > max_fanbeam_traversal ) max_fanbeam_traversal = point->traversals->size();
+
 			unique_points->push_back(point);
 		}
 		unique_points_file_stream.close();
 	}
+
+	return EXIT_SUCCESS;
 
 }
 
@@ -642,12 +689,7 @@ void Worker::start(void)
 	DeviceTimeSeries<float> d_tim_r(size);
 	TimeDomainResampler resampler;
 	DevicePowerSpectrum<float> pspec(d_fseries);
-	Zapper* bzap;
-	if (args.zapfilename!=""){
-		if (args.verbose)
-			std::cout << "Using zapfile: " << args.zapfilename << std::endl;
-		bzap = new Zapper(args.zapfilename);
-	}
+
 	Dereddener rednoise(size/2+1);
 	SpectrumFormer former;
 	PeakFinder cand_finder(args.min_snr,args.min_freq,args.max_freq,size);
@@ -680,44 +722,49 @@ void Worker::start(void)
 		}
 
 		if (args.verbose)
-			std::cout << "Generating accelration list" << std::endl;
+			std::cerr << "Generating accelration list" << std::endl;
 		acc_plan.generate_accel_list(tim.get_dm(),acc_list);
 
 		if (args.verbose)
-			std::cout << "Searching "<< acc_list.size()<< " acceleration trials for DM "<< tim.get_dm() << std::endl;
+			std::cerr << "Searching "<< acc_list.size()<< " acceleration trials for DM "<< tim.get_dm() << std::endl;
 
 		if (args.verbose)
-			std::cout << "Executing forward FFT" << std::endl;
+			std::cerr << "Executing forward FFT" << std::endl;
 		r2cfft.execute(d_tim.get_data(),d_fseries.get_data());
 
 		if (args.verbose)
-			std::cout << "Forming power spectrum" << std::endl;
+			std::cerr << "Forming power spectrum" << std::endl;
 		former.form(d_fseries,pspec);
 
 		if (args.verbose)
-			std::cout << "Finding running median" << std::endl;
+			std::cerr << "Finding running median" << std::endl;
 		rednoise.calculate_median(pspec);
 
 		if (args.verbose)
-			std::cout << "Dereddening Fourier series" << std::endl;
+			std::cerr << "Dereddening Fourier series" << std::endl;
 		rednoise.deredden(d_fseries);
 
-		if (args.zapfilename!=""){
+//		cerr << "bzap" << (bzap == NULL) << endl;
+
+		if (bzap){
+
 			if (args.verbose)
-				std::cout << "Zapping birdies" << std::endl;
+				std::cerr << "Zapping birdies" << std::endl;
+
 			bzap->zap(d_fseries);
 		}
 
+
 		if (args.verbose)
-			std::cout << "Forming interpolated power spectrum" << std::endl;
+			std::cerr << "Forming interpolated power spectrum" << std::endl;
 		former.form_interpolated(d_fseries,pspec);
 
 		if (args.verbose)
-			std::cout << "Finding statistics" << std::endl;
+			std::cerr << "Finding statistics" << std::endl;
 		stats::stats<float>(pspec.get_data(),size/2+1,&mean,&rms,&std);
 
 		if (args.verbose)
-			std::cout << "Executing inverse FFT" << std::endl;
+			std::cerr << "Executing inverse FFT" << std::endl;
 		c2rfft.execute(d_fseries.get_data(),d_tim.get_data());
 
 		CandidateCollection accel_trial_cands;
@@ -725,27 +772,27 @@ void Worker::start(void)
 
 		for (int jj=0;jj<acc_list.size();jj++){
 			if (args.verbose)
-				std::cout << "Resampling to "<< acc_list[jj] << " m/s/s" << std::endl;
+				std::cerr << "Resampling to "<< acc_list[jj] << " m/s/s" << std::endl;
 			resampler.resampleII(d_tim,d_tim_r,size,acc_list[jj]);
 
 			if (args.verbose)
-				std::cout << "Execute forward FFT" << std::endl;
+				std::cerr << "Execute forward FFT" << std::endl;
 			r2cfft.execute(d_tim_r.get_data(),d_fseries.get_data());
 
 			if (args.verbose)
-				std::cout << "Form interpolated power spectrum" << std::endl;
+				std::cerr << "Form interpolated power spectrum" << std::endl;
 			former.form_interpolated(d_fseries,pspec);
 
 			if (args.verbose)
-				std::cout << "Normalise power spectrum" << std::endl;
+				std::cerr << "Normalise power spectrum" << std::endl;
 			stats::normalise(pspec.get_data(),mean*size,std*size,size/2+1);
 
 			if (args.verbose)
-				std::cout << "Harmonic summing" << std::endl;
+				std::cerr << "Harmonic summing" << std::endl;
 			harm_folder.fold(pspec);
 
 			if (args.verbose)
-				std::cout << "Finding peaks" << std::endl;
+				std::cerr << "Finding peaks" << std::endl;
 			SpectrumCandidates trial_cands(tim.get_dm(),ii,acc_list[jj]);
 			if (args.verbose)
 				std::cerr << "SpectrumCandidates" << std::endl;
@@ -755,22 +802,21 @@ void Worker::start(void)
 			cand_finder.find_candidates(sums,trial_cands);
 
 			if (args.verbose)
-				std::cout << "Distilling harmonics" << std::endl;
+				std::cerr << "Distilling harmonics" << std::endl;
 			accel_trial_cands.append(harm_finder.distill(trial_cands.cands));
 		}
 		POP_NVTX_RANGE
 		if (args.verbose)
-			std::cout << "Distilling accelerations" << std::endl;
+			std::cerr << "Distilling accelerations" << std::endl;
 		dm_trial_cands.append(acc_still.distill(accel_trial_cands.cands));
 	}
 	POP_NVTX_RANGE
 
-	if (args.zapfilename!="")
-		delete bzap;
 
 	if (args.verbose)
-		std::cout << "DM processing took " << pass_timer.getTime() << " seconds"<< std::endl;
+		std::cerr << "DM processing took " << pass_timer.getTime() << " seconds"<< std::endl;
 }
+
 
 
 

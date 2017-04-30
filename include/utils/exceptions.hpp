@@ -1,4 +1,8 @@
 #pragma once
+
+#ifndef EXCEPTIONS_H_
+#define EXCEPTIONS_H_
+
 #include <fstream>
 #include <stdexcept>
 #include <string>
@@ -12,6 +16,35 @@
 
 class ErrorChecker {
 public:
+
+  static int check_pthread_create_error(int pthread_return_value, std::string function_name){
+
+	  if(pthread_return_value == EXIT_SUCCESS ) return EXIT_SUCCESS;
+
+	  std::stringstream  error_message;
+	  error_message << function_name << " ";
+	  switch(pthread_return_value){
+
+	  case EAGAIN:
+		  error_message << "The system lacked the necessary resources to create another thread, "
+		  			  "or the system-imposed limit on the total number of threads "
+		  			  "in a process PTHREAD_THREADS_MAX would be exceeded.";
+		  break;
+	  case EINVAL:
+		  error_message << "the attr value to pthread_create is invalid. ";
+		  break;
+	  case EPERM:
+		  error_message << "The caller does not have appropriate permission to set "
+				  "the required scheduling parameters or scheduling policy.";
+		  break;
+
+	  }
+
+	  return EXIT_FAILURE;
+
+
+  }
+
   static void check_dedisp_error(dedisp_error error,
 			    std::string function_name)
   {
@@ -151,3 +184,6 @@ public:
     }
   }
 };
+
+
+#endif /* EXCEPTIONS_H_ */

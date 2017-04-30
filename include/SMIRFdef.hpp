@@ -19,6 +19,8 @@
 
 #define MOPSR_BP_CFG "/home/dada/linux_64/share/mopsr_bp.cfg"
 #define MOPSR_BP_CORNERTURN_CFG "/home/dada/linux_64/share/mopsr_bp_cornerturn.cfg"
+#define MOPSR_CFG "/home/dada/linux_64/share/mopsr.cfg"
+#define SMIRF_CFG "/home/vivek/SMIRF/config/smirf.cfg"
 
 #define POINT_RA 0
 #define POINT_DEC 1

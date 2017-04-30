@@ -161,14 +161,18 @@ template<typename T> inline void scrunch(T* data,T* out, int n, int b){
 	}
 }
 
-
-FILE* file_open(const char* absolutename, const char* mode);
+int  file_open(FILE** file, const char* absolutename, const char* mode);
+bool file_exists (const std::string& name);
 int check_size(unsigned long req, unsigned long got);
+
 void split(const std::string &s, char delim, std::vector<std::string> &elems);
 std::vector<std::string> split(const std::string &s, char delim);
+
 void sigproc_to_hhmmss(double sigproc,char* hhmmss);
 void sigproc_to_ddmmss(double sigproc,char* ddmmss);
 int ddmmss_to_sigproc (const char * ddmmss, double * sigproc);
 int hhmmss_to_sigproc (const char * hhmmss, double * sigproc);
+
+int get_number_from_server_name(std::string server_name, int* server);
 
 #endif /* UTILITYFNS_H_ */

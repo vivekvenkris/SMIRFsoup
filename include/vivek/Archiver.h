@@ -34,7 +34,10 @@
 #include <cstring>
 
 #define SHARED_BUFFER_SIZE 8 * 1024 * 1024
-#define OUT_KEY 0xdead
+
+const char* const CANDIDATE_FILENAME_KEY = "CAND_FILEs";
+const char* const OUT_DIR_KEY = "FOLD_OUT";
+
 namespace vivek {
 class Archiver;
 }
@@ -45,7 +48,10 @@ public:
     dada_hdu_t* out_hdu;
     key_t out_key;
     multilog_t* log;
+
 	Archiver();
+	Archiver( key_t out_key): out_key(out_key){ out_hdu = 0; log = 0;}
+
 	int transfer_fil_to_DADA_buffer(vivek::Filterbank* f);
 	virtual ~Archiver();
 };

@@ -15,11 +15,12 @@
 
 
 
-vivek::Filterbank::Filterbank(std::string file_name, std::string mode, bool verbose){
-	this->verbose = true;
-	this->file_name = file_name;
-	file = file_open(file_name.c_str(),mode.c_str());
-	if(this->verbose) std::cerr<< "Opening file:" << file_name <<  " in " << mode <<" mode."<<"File ptr is: " <<file << std::endl;
+vivek::Filterbank::Filterbank(std::string file_name, std::string mode, bool verbose)
+ 	 	 	 	 	 	 	 	 	 :file_name(file_name),verbose(verbose),mode(mode){
+
+	if(mode == VIRTUALFIL) return;
+	file_open(&file, file_name.c_str(),mode.c_str());
+	if(this->verbose) std::cerr<< "Opening file:" << file_name <<  " in " << mode <<" mode."<< std::endl;
 	read_header_keys();
 	if(mode ==FILREAD){
 		int header_size =  read_header();
@@ -30,15 +31,18 @@ vivek::Filterbank::Filterbank(std::string file_name, std::string mode, bool verb
 	else if(mode == FILWRITE){
 
 	}
-	this->mode = mode;
+
+
 }
 
 vivek::Filterbank::~Filterbank(){
-	std::cerr<< "deleting: " << this->file_name << std::endl;
-	for(std::vector<vivek::HeaderParamBase*>::iterator it = header_params.begin(); it != header_params.end(); ++it)
-		delete *it;
+
+	for(std::vector<vivek::HeaderParamBase*>::iterator it = header_params.begin(); it != header_params.end(); ++it) delete *it;
+
 	delete[] data;
+
 	fclose(file);
+
 }
 
 
@@ -70,6 +74,7 @@ int vivek::Filterbank::read_header_keys(){
 
 	}
 
+
 	return EXIT_SUCCESS;
 
 }
@@ -91,7 +96,20 @@ vivek::HeaderParamBase* vivek::Filterbank::get_header_param(const char* key){
 	return NULL;
 }
 
-void vivek::Filterbank::load_all_data(){
+void vivek::Filterbank::remove_header_param(const char* key){
+	for(std::vector<vivek::HeaderParamBase*>::iterator it = header_params.begin(); it != header_params.end(); ++it) {
+		if(!strcmp((*it)->key.c_str(), key)){
+			header_params.erase(it);
+			return;
+		}
+	}
+}
+int vivek::Filterbank::load_all_data(){
+
+	if(mode !=  std::string((char*)FILREAD)){
+		std::cerr<<" fil not opened in read mode aborting now. " << std::endl;
+		return EXIT_FAILURE;
+	}
 
 	unsigned long nbytes  = this->nsamps * this->nchans * this->nbits/8.0;
 
@@ -99,7 +117,7 @@ void vivek::Filterbank::load_all_data(){
 
 	if(this->verbose) fprintf(stderr," reading %lu bytes \n",nbytes);
 
-	read_nbytes(nbytes,data);
+	return read_nbytes(nbytes,data);
 }
 
 int vivek::Filterbank::read_num_samples(int ngulp, unsigned char* data){
@@ -194,7 +212,9 @@ int vivek::Filterbank::unload_filterbank(){
 }
 
 int vivek::Filterbank::read_header(){
+
 	rewind(file);
+
 	int iter=0;
 	bool header_started = false;
 	while(1){
@@ -230,7 +250,7 @@ int vivek::Filterbank::read_header(){
 					double tobs = nsamples*tsamp;
 					add_to_header<long>(NSAMPLES,LONG,nsamples);
 					add_to_header<double>(TOBS,DOUBLE,tobs);
-					std::cerr <<"nsamp:" << nsamples << " " << get_value_for_key<long>(NSAMPLES) << std::endl;
+
 					this->nchans = nchans;
 					this->nbits = nbits;
 					this->nsamps = nsamples;

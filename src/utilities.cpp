@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <iostream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <regex>
 #include "../include/vivek/utilities.hpp"
 
 
@@ -18,16 +21,48 @@ void log_message(std::string message, int level){
 }
 
 
-FILE* file_open(const char* absolutename, const char* mode) {
-	FILE* file = fopen(absolutename, mode);
-	if (!file) {
-		fprintf(stderr, "could not open '%s': %s\n", absolutename,
-				strerror(errno));
-		exit(1);
+/**
+ * Get server number from server name
+ * assumes server of the form <string><int> <string> eg: mopsr-bf00 or mopsr-bf01.obs.molonglo.local
+ */
+int get_number_from_server_name(std::string server_name, int* server){
+
+	std::regex pattern("\\d+");
+	std::cmatch match;
+
+	regex_search(server_name.c_str(), match, pattern);
+
+	if(match.size() !=1){
+		std::cerr << "Cannot extract server number from server name: " << server_name << std::endl;
+		return EXIT_FAILURE;
 	}
-	return file;
+
+	std::string matched = match[0];
+	*server = ::atoi(matched.c_str());
+
+	return EXIT_SUCCESS;
 }
 
+int  file_open(FILE** file, const char* absolutename, const char* mode) {
+
+	*file = fopen(absolutename, mode);
+
+	if (!*file) {
+
+		std::cerr<< "could not open '" << absolutename << "' in mode '"
+				<< mode << "' Errorno: " << strerror(errno) << std::endl;
+
+		return EXIT_FAILURE;
+	}
+	return EXIT_SUCCESS;
+}
+
+
+bool file_exists (const std::string& name) {
+
+  struct stat buffer;
+  return (stat (name.c_str(), &buffer) == 0);
+}
 
 
 int check_size(unsigned long req, unsigned long got){
@@ -58,7 +93,7 @@ std::vector<std::string> split(const std::string &s, char delim) {
 void sigproc_to_hhmmss(double sigproc,char* hhmmss){
 
   char sigproc_str[15];
-  sprintf(sigproc_str,"%08.2lf",sigproc);
+  sprintf(sigproc_str,"%09.2lf",sigproc);
   char hh[3],mm[3],ss[3],ff[strlen(sigproc_str)-6];
   memcpy(hh,&sigproc_str[0],2);
   memcpy(mm,&sigproc_str[2],2);
@@ -69,13 +104,17 @@ void sigproc_to_hhmmss(double sigproc,char* hhmmss){
 
   sprintf(hhmmss,"%s:%s:%s%s",hh,mm,ss,ff);
 
+  std::cerr << "sigproc: "<< sigproc << "hhmmss:" << hhmmss <<std::endl;
+
 
 }
 
 void sigproc_to_ddmmss(double sigproc,char* ddmmss){
 
   char sigproc_str[13];
-  sprintf(sigproc_str,"%7.6lf",sigproc);
+
+  if(sigproc < 0 ) sprintf(sigproc_str,"%10.2lf",sigproc);
+  else sprintf(sigproc_str,"%09.2lf",sigproc);
 
   char dd[4],mm[3],ss[3],ff[strlen(sigproc_str)-7];
   memcpy(dd,&sigproc_str[0],3);
@@ -85,6 +124,9 @@ void sigproc_to_ddmmss(double sigproc,char* ddmmss){
   dd[3] = mm[2] = ss[2] = ff[strlen(sigproc_str)-7-1] = '\0';
 
   sprintf(ddmmss,"%s:%s:%s%s",dd,mm,ss,ff);
+
+  std::cerr << "sigproc: "<< sigproc << "hhmmss:" << ddmmss <<std::endl;
+
 
 
 }
@@ -179,5 +221,92 @@ int hhmmss_to_sigproc (const char * hhmmss, double * sigproc)
 
 
 
+int hhmmss_to_double (const char * hhmmss, double * degree_value)
+{
+  int ihour = 0;
+  int imin = 0;
+  double sec = 0;
+  const char *sep = ":";
+  char * saveptr;
+
+  char * copy = (char *) new_and_check<char> (strlen(hhmmss) + 1,"hhmmss_to_sigproc");
+  strcpy (copy, hhmmss);
+
+  char * str = strtok_r(copy, sep, &saveptr);
+  if (str != NULL)
+  {
+    if (sscanf(str, "%d", &ihour) != 1)
+      return -1;
+
+    str = strtok_r(NULL, sep, &saveptr);
+    if (str != NULL)
+    {
+      if (sscanf(str, "%d", &imin) != 1)
+        return -1;
+
+      str = strtok_r(NULL, sep, &saveptr);
+      if (str != NULL)
+      {
+        if (sscanf(str, "%lf", &sec) != 1)
+          return -1;
+      }
+    }
+  }
+  free (copy);
+
+  char s = '\0';
+  if (ihour < 0)
+  {
+    ihour *= -1;
+    s = '-';
+  }
+
+  *degree_value = ((double)ihour*15.0  + (double)imin*15.0/60.0 + sec * 15.0/3600.0);
+  return 0;
+}
+
+
+
+int ddmmss_to_double (const char * ddmmss, double * degree_value)
+{
+  int ideg = 0;
+  int iamin = 0;
+  double asec = 0;
+  const char *sep = ":";
+  char * saveptr;
+
+  char * copy =  new_and_check<char> (strlen(ddmmss) + 1,"ddmmss_to_sigproc");
+  strcpy (copy, ddmmss);
+
+  char * str = strtok_r(copy, sep, &saveptr);
+  if (str != NULL)
+  {
+    if (sscanf(str, "%d", &ideg) != 1)
+      return -1;
+
+    str = strtok_r(NULL, sep, &saveptr);
+    if (str != NULL)
+    {
+      if (sscanf(str, "%d", &iamin) != 1)
+        return -1;
+
+      str = strtok_r(NULL, sep, &saveptr);
+      if (str != NULL)
+      {
+        if (sscanf(str, "%lf", &asec) != 1)
+          return -1;
+      }
+    }
+  }
+
+  free (copy);
+
+  if (ideg < 0)
+    *degree_value = ((double) ideg - (double) iamin/60.0) - asec/3600.0;
+  else
+    *degree_value = ((double) ideg  + (double) iamin/60.0) + asec/3600.0;
+
+  return 0;
+}
 
 
