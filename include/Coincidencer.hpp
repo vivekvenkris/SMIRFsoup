@@ -37,7 +37,7 @@ private:
 
 	CandidateCollection other_candidates;
 
-	CandidateCollection* this_candidates;
+	CandidateCollection this_candidates;
 
 	CandidateCollection* shortlisted_candidates;
 
@@ -53,16 +53,22 @@ private:
 
 
 public:
-	Coincidencer(CandidateCollection* this_candidates, std::string host): this_candidates(this_candidates), this_host(host) {
 
+	Coincidencer(){
 		candidate_collection_map = new std::map<std::string, CandidateCollection>();
 
 		shortlisted_candidates = new CandidateCollection();
 
-		int start_server = pthread_create(&server, NULL, Coincidencer::candidates_server, (void*) candidate_collection_map);
+		int start_server = pthread_create(&server, NULL, Coincidencer::candidates_server, (void*) this);
 		ErrorChecker::check_pthread_create_error(start_server, "Coincidencer constructor -- starting server");
 
 	}
+
+	Coincidencer(std::string host): Coincidencer() {	this->this_host = host; }
+
+	Coincidencer(CandidateCollection this_candidates, std::string host): Coincidencer(host) {	this->this_candidates = this_candidates;}
+
+	void init_this_candidates(CandidateCollection c);
 
 	int gather_all_candidates();
 
