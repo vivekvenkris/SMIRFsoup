@@ -287,6 +287,10 @@ int main(int argc, char **argv) {
 	 * be reused for all stitches.
 	 */
 
+	/**
+	 * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
+	 */
+	Coincidencer* coincidencer = new Coincidencer(args.host);
 
 
 	vector<float> acc_list;
@@ -324,8 +328,6 @@ int main(int argc, char **argv) {
 	stats.to_file(xml_filename.str());
 
 
-
-
 	map<int, DispersionTrials<unsigned char> > dedispersed_series_map;
 
 	for(vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
@@ -350,7 +352,7 @@ int main(int argc, char **argv) {
 	size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
 	int reduced_nsamples = nsamples - max_delay;
 
-	CandidateCollection* all_cands = new CandidateCollection();
+	CandidateCollection all_cands;
 
 	int point_index= 1;
 	int candidate_id = 1;
@@ -393,10 +395,14 @@ int main(int argc, char **argv) {
 
 		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
-		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point->ra, point->dec, candidate_id, all_cands );
+		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point->ra, point->dec, candidate_id, &all_cands );
+
+		for(Candidate c: all_cands.cands){
+
+		}
 
 		if(cand_size == -1) {
-			cerr << "Problem peasouping line: " << point_index << endl;
+			cerr << endl <<  "Problem peasouping line: " << point_index << endl;
 			return EXIT_FAILURE;
 		}
 
@@ -408,9 +414,11 @@ int main(int argc, char **argv) {
 
 	}
 
-	for(int i=0; i< all_cands->cands.size(); i++ ){
+	cerr << endl;
 
-		Candidate c = all_cands->cands[i];
+	for(int i=0; i< all_cands.cands.size(); i++ ){
+
+		Candidate c = all_cands.cands[i];
 
 		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
 	}
@@ -418,7 +426,7 @@ int main(int argc, char **argv) {
 	DMDistiller dm_still(args.freq_tol,true);
 
 	CandidateCollection distilled_cands;
-	distilled_cands.cands = dm_still.distill(all_cands->cands);
+	distilled_cands.cands = dm_still.distill(all_cands.cands);
 
 
 	for(int i=0; i< distilled_cands.cands.size(); i++ ){
@@ -431,8 +439,7 @@ int main(int argc, char **argv) {
 
 	cerr << "Attempting to call coincidencer" << endl;
 
-	Coincidencer* coincidencer = new Coincidencer(all_cands,args.host);
-
+	coincidencer->init_this_candidates(all_cands);
 	coincidencer->gather_all_candidates();
 
 	cerr << endl << " Done." << endl;
