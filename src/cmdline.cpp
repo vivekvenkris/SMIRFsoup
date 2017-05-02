@@ -137,9 +137,9 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 
       TCLAP::ValueArg<std::string> arg_out_suffix("s", "out_suffix"," Add output suffix", false, "", "string",cmd);
 
-      TCLAP::ValueArg<std::string> arg_uniq_pts_file("u", "uniq_pts_file", " Unique points file name default: <utc>.<server>.uniq ", false, "", "string",cmd);
+      TCLAP::ValueArg<std::string> arg_uniq_pts_file("u", "uniq_pts_file", " Unique points file name default: <utc>.<server>.pts ", false, "", "string",cmd);
 
-      TCLAP::ValueArg<std::string> arg_uniq_pts_dir("U", "uniq_pts_dir"," Directory to find unique points file", false, SMIRF_BASE, "string",cmd);
+      TCLAP::ValueArg<std::string> arg_uniq_pts_dir("U", "uniq_pts_dir"," Directory to find unique points file default: SMIRF_BASE/<utc>/", false, "", "string",cmd);
 
       TCLAP::ValueArg<std::string> arg_candidates_file("c", "candidates_file", " Coincidenced candidate file name to use with -T option",
     		  	  	  	  	  	  	  	  	  	  	  false, "candidates.shortlisted", "string",cmd);
@@ -195,6 +195,7 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
       args.uniq_points_dir 	 = arg_uniq_pts_dir.getValue();
       args.uniq_points_file	 = arg_uniq_pts_file.getValue();
 
+
       args.out_suffix		 = arg_out_suffix.getValue();
       args.point_num		 = arg_point_num.getValue();
 
@@ -232,6 +233,19 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
       if(args.uniq_points_dir.empty()) args.uniq_points_dir = args.smirf_utc_dir;
 
       if(args.out_dir.empty() ) args.out_dir = args.smirf_utc_dir;
+
+      if(args.uniq_points_file.empty()) {
+    	  std::ostringstream oss;
+    	  oss << args.utc << "." << args.host << ".pts";
+    	  args.uniq_points_file = oss.str();
+      }
+
+      if(args.candidates_file.empty()){
+    	  std::ostringstream oss;
+    	  oss << args.utc << ".shortlisted." << args.host << ".cands";
+    	  args.candidates_file = oss.str();
+      }
+
 
       std::stringstream out_key_stream;
       out_key_stream << std::hex << arg_dada_key.getValue();
