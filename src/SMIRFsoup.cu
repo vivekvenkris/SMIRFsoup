@@ -29,7 +29,7 @@
 #include "SMIRFdef.hpp"
 #include "ConfigManager.hpp"
 #include "ShutdownManager.hpp"
-
+#include "vivek/utilities.hpp"
 #include "Rsyncer.hpp"
 
 
@@ -231,7 +231,6 @@ int main(int argc, char **argv) {
 
 	Zapper* bzap = NULL;
 
-	//std::cerr <<  "Main inga:  " << (bzap == NULL ) << std::endl;
 
 
 	if ( !args.zapfilename.empty() ) {
@@ -290,7 +289,7 @@ int main(int argc, char **argv) {
 	/**
 	 * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
 	 */
-	Coincidencer* coincidencer = new Coincidencer(args.host);
+	Coincidencer* coincidencer = new Coincidencer(args, freq_bin_width/(args.size * ffb->tsamp), max_fanbeam_traversal );
 
 
 	vector<float> acc_list;
@@ -395,11 +394,8 @@ int main(int argc, char **argv) {
 
 		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
-		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point->ra, point->dec, candidate_id, &all_cands );
+		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point, candidate_id, &all_cands );
 
-		for(Candidate c: all_cands.cands){
-
-		}
 
 		if(cand_size == -1) {
 			cerr << endl <<  "Problem peasouping line: " << point_index << endl;
@@ -439,8 +435,17 @@ int main(int argc, char **argv) {
 
 	cerr << "Attempting to call coincidencer" << endl;
 
-	coincidencer->init_this_candidates(all_cands);
+	coincidencer->init_this_candidates(distilled_cands);
+	coincidencer->send_candidates_to_all_nodes();
 	coincidencer->gather_all_candidates();
+	coincidencer->coincidence();
+	coincidencer->print_shortlisted_candidates();
+
+	ostringstream oss;
+	oss << "test_out" << "." << ConfigManager::this_host();
+
+	FILE* fp = fopen(oss.str().c_str(),"w");
+	coincidencer->print_shortlisted_candidates(fp);
 
 	cerr << endl << " Done." << endl;
 }
@@ -449,14 +454,13 @@ int main(int argc, char **argv) {
 
 
 int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, string pt_ra, string pt_dec, int candidate_id, CandidateCollection* all_cands){
+		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
 
-	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap);
+	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap,point);
 
 	string name = get_candidate_file_name(args.out_dir, -1, args.host );
 
-
-	stats.add_candidates(dm_cands.cands,pt_num,pt_ra,pt_dec);
+	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
 
 	FILE* fp;
 
@@ -464,11 +468,12 @@ int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<
 		cerr << "Problem opening candidate file for writing / appending." << endl;
 	}
 
-	dm_cands.print_cand_file(fp,pt_ra.c_str(),pt_dec.c_str(), candidate_id);
+	dm_cands.print_cand_file(fp, candidate_id);
 
 	fclose(fp);
 
 	stats.to_file();
+
 
 	all_cands->append(dm_cands);
 
@@ -478,7 +483,7 @@ int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<
 }
 
 CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
-		Zapper* bzap) {
+		Zapper* bzap, UniquePoint* point) {
 
 	CandidateCollection dm_cands;
 
@@ -486,7 +491,7 @@ CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, Disper
 
 	DMDispenser dispenser(trials);
 
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap);
+	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap, point);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
 
@@ -801,6 +806,7 @@ void Worker::start(void)
 			if (args.verbose)
 				std::cerr << "Finding peaks" << std::endl;
 			SpectrumCandidates trial_cands(tim.get_dm(),ii,acc_list[jj]);
+
 			if (args.verbose)
 				std::cerr << "SpectrumCandidates" << std::endl;
 			cand_finder.find_candidates(pspec,trial_cands);
@@ -808,9 +814,21 @@ void Worker::start(void)
 				std::cerr << "after pspec" << sums.size() << std::endl;
 			cand_finder.find_candidates(sums,trial_cands);
 
+			CandidateCollection updated_candidates;
+			for(Candidate c: trial_cands.cands){
+
+				c.ra_str = point->ra;
+				c.dec_str = point->dec;
+
+				c.start_fanbeam = point->startFanbeam;
+				c.start_ns = point->startNS;
+
+				updated_candidates.append(c);
+			}
+
 			if (args.verbose)
 				std::cerr << "Distilling harmonics" << std::endl;
-			accel_trial_cands.append(harm_finder.distill(trial_cands.cands));
+			accel_trial_cands.append(harm_finder.distill(updated_candidates.cands));
 		}
 		POP_NVTX_RANGE
 		if (args.verbose)

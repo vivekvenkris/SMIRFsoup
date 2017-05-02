@@ -72,6 +72,7 @@ private:
 	CmdLineOptions& args;
 	AccelerationPlan& acc_plan;
 	Zapper* bzap;
+	UniquePoint* point;
 	unsigned int size;
 	int device;
 	std::map<std::string,Stopwatch> timers;
@@ -80,8 +81,8 @@ public:
 	CandidateCollection dm_trial_cands;
 
 	Worker(DispersionTrials<unsigned char>& trials, DMDispenser& manager,
-			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device,Zapper* bzap)
-	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device),bzap(bzap){}
+			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device,Zapper* bzap, UniquePoint* point)
+	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device),bzap(bzap),point(point){}
 
 	void start(void);
 };
@@ -93,13 +94,13 @@ int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>*
 
 
 int peasoup_multi(vivek::Filterbank* filobj, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-					AccelerationPlan& acc_plan,Zapper* bzap, int pt_num,std::string pt_ra, std::string pt_dec,
+					AccelerationPlan& acc_plan,Zapper* bzap, int pt_num,UniquePoint* point,
 					int candidate_id,  CandidateCollection* all_cands);
 
 
 
 CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
-							Zapper* bzap);
+							Zapper* bzap, UniquePoint* point);
 
 CandidateCollection get_zero_dm_candidates(std::map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args);
 
