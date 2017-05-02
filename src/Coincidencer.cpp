@@ -175,6 +175,7 @@ int Coincidencer::coincidence(){
 
 void Coincidencer::print_shortlisted_candidates(FILE* fo){
 
+	fprintf(fo,"SOURCE RA DEC PERIOD DM ACC SNR\n");
 	shortlisted_candidates.print_cand_file(fo,0);
 
 }

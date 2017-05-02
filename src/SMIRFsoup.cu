@@ -442,7 +442,7 @@ int main(int argc, char **argv) {
 	coincidencer->print_shortlisted_candidates();
 
 	ostringstream oss;
-	oss << "test_out" << "." << ConfigManager::this_host();
+	oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
 
 	FILE* fp = fopen(oss.str().c_str(),"w");
 	coincidencer->print_shortlisted_candidates(fp);
