@@ -26,25 +26,30 @@
 #include <network/SocketException.hpp>
 
 #include "ConfigManager.hpp"
-
+#include "utils/cmdline.hpp"
 
 
 class Coincidencer {
 
 private:
 
-	std::map<std::string, CandidateCollection>* candidate_collection_map;
+	std::map<std::string, CandidateCollection> candidate_collection_map;
 
 	CandidateCollection other_candidates;
 
 	CandidateCollection this_candidates;
 
-	CandidateCollection* shortlisted_candidates;
+	CandidateCollection shortlisted_candidates;
 
-	std::string this_host;
 
 	pthread_t server;
 	pthread_t client;
+
+	CmdLineOptions& args;
+
+	double bin_width;
+
+	int max_fanbeam_traversal;
 
 	static void* candidates_server(void* candidates_map);
 
@@ -54,23 +59,20 @@ private:
 
 public:
 
-	Coincidencer(){
-		candidate_collection_map = new std::map<std::string, CandidateCollection>();
-
-		shortlisted_candidates = new CandidateCollection();
+	Coincidencer(CmdLineOptions& args, double bin_width, int max_fanbeam_traversal):args(args),bin_width(bin_width),max_fanbeam_traversal(max_fanbeam_traversal) {
 
 		int start_server = pthread_create(&server, NULL, Coincidencer::candidates_server, (void*) this);
 		ErrorChecker::check_pthread_create_error(start_server, "Coincidencer constructor -- starting server");
 
 	}
 
-	Coincidencer(std::string host): Coincidencer() {	this->this_host = host; }
-
-	Coincidencer(CandidateCollection this_candidates, std::string host): Coincidencer(host) {	this->this_candidates = this_candidates;}
-
 	void init_this_candidates(CandidateCollection c);
 
+	int send_candidates_to_all_nodes();
+
 	int gather_all_candidates();
+
+	void print_shortlisted_candidates(FILE* fo=stderr);
 
 	int coincidence();
 
