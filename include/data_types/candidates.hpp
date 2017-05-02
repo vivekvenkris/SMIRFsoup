@@ -21,8 +21,8 @@ struct CandidatePOD {
 struct Candidate {
 public:
 	std::string host;
-	float ra;
-	float dec;
+	std::string ra_str;
+	std::string dec_str;
 	float start_fanbeam;
 	float start_ns;
 	float dm;
@@ -59,19 +59,19 @@ public:
 	:dm(dm),dm_idx(dm_idx),acc(acc),nh(nh),
 	 snr(snr),folded_snr(0.0),freq(freq),
 	 opt_period(0.0),is_adjacent(false),is_physical(false),
-	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
+	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
 
 	Candidate(float dm, int dm_idx, float acc, int nh, float snr, float folded_snr, float freq)
 	:dm(dm),dm_idx(dm_idx),acc(acc),nh(nh),snr(snr),
 	 folded_snr(folded_snr),freq(freq),opt_period(0.0),
 	 is_adjacent(false),is_physical(false),
-	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
+	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
 
 	Candidate()
 	:dm(0.0),dm_idx(0.0),acc(0.0),nh(0.0),snr(0.0),
 	 folded_snr(0.0),freq(0.0),opt_period(0.0),
 	 is_adjacent(false),is_physical(false),
-	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),ra(0),dec(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
+	 ddm_count_ratio(0.0),ddm_snr_ratio(0.0),nints(0),nbins(0),host(ConfigManager::this_host()),start_fanbeam(0), start_ns(0){}
 
 	void set_fold(float* ar, int nbins, int nints){
 		int size = nbins*nints;
@@ -103,29 +103,14 @@ public:
 
 
 
-	void print_cand_file(FILE* fo, int index, std::string ra, std::string dec){
+	void print_cand_file(FILE* fo, int index){
 		std::stringstream source_name;
 		source_name << "SMIRF" << "_" << std::setfill('0') << std::setw(3) << index;
 		fprintf(fo,"%s %s %s %.15f %.2f %.2f %.1f\n",
-				source_name.str().c_str(),ra.c_str(),dec.c_str(),opt_period,dm,acc,snr);
+				source_name.str().c_str(),ra_str.c_str(),dec_str.c_str(),opt_period,dm,acc,snr);
 
 	}
 
-	float getDec() const {
-		return dec;
-	}
-
-	void setDec(float dec) {
-		this->dec = dec;
-	}
-
-	float getRa() const {
-		return ra;
-	}
-
-	void setRa(float ra) {
-		this->ra = ra;
-	}
 
 	friend std::istringstream& operator>> (std::istringstream &in, Candidate& a);
 	friend std::ostringstream& operator<< (std::ostringstream &out, const  Candidate& a);
@@ -138,8 +123,10 @@ inline std::istringstream& operator>> (std::istringstream &iss, Candidate& c){
 	int assoc_size;
 
 	iss >> c.host
-		>> c.ra
-		>> c.dec
+		>> c.ra_str
+		>> c.dec_str
+		>> c.start_fanbeam
+		>> c.start_ns
 		>> c.dm
 		>> c.dm_idx
 		>> c.acc
@@ -156,11 +143,12 @@ inline std::istringstream& operator>> (std::istringstream &iss, Candidate& c){
 		>> c.nints
 		>> assoc_size;
 
-	for(int i=0; i< assoc_size; i++ ){
-		Candidate cand;
-		iss >> cand;
-		c.append(cand);
-	}
+//	std::cerr << c << std::endl;
+//	for(int i=0; i< assoc_size; i++ ){
+//		Candidate cand;
+//		iss >> cand;
+//		c.append(cand);
+//	}
 
 	return iss;
 }
@@ -168,8 +156,10 @@ inline std::istringstream& operator>> (std::istringstream &iss, Candidate& c){
 inline std::ostringstream& operator<< (std::ostringstream &oss, const  Candidate& c){
 
 		oss	<< c.host << " "
-			<< c.ra << " "
-			<< c.dec << " "
+			<< c.ra_str << " "
+			<< c.dec_str << " "
+			<< c.start_fanbeam << " "
+			<< c.start_ns << " "
 			<< c.dm << " "
 			<< c.dm_idx << " "
 			<< c.acc << " "
@@ -186,7 +176,7 @@ inline std::ostringstream& operator<< (std::ostringstream &oss, const  Candidate
 			<< c.nints << " "
 			<< c.assoc.size() << " ";
 
-		for( Candidate assoc_cand : c.assoc ) oss <<  assoc_cand;
+		//for( Candidate assoc_cand : c.assoc ) oss <<  assoc_cand;
 
 	return oss;
 }
@@ -194,7 +184,26 @@ inline std::ostringstream& operator<< (std::ostringstream &oss, const  Candidate
 inline std::ostream& operator<< (std::ostream &out, const  Candidate &c){
 
 	std::ostringstream oss;
-	oss << c;
+	oss << c.host << " "
+				<< c.ra_str << " "
+				<< c.dec_str << " "
+				<< c.start_fanbeam << " "
+				<< c.start_ns << " "
+				<< c.dm << " "
+				<< c.dm_idx << " "
+				<< c.acc << " "
+				<< c.nh << " "
+				<< c.snr << " "
+				<< c.freq << " "
+				<< c.folded_snr << " "
+				<< c.opt_period << " "
+				<< c.is_adjacent << " "
+				<< c.is_physical << " "
+				<< c.ddm_count_ratio << " "
+				<< c.ddm_snr_ratio << " "
+				<< c.nbins << " "
+				<< c.nints << " "
+				<< c.assoc.size() << " ";
 	out << oss.str();
 
 	return out;
@@ -230,12 +239,12 @@ public:
 			cands[ii].print(fo);
 	}
 
-	void print_cand_file(FILE* fo, std::string ra, std::string dec, int candidate_id){
+	void print_cand_file(FILE* fo, int candidate_id){
 
 		if(candidate_id ==1) fprintf(fo,"SOURCE RA DEC PERIOD DM ACC SNR\n");
 
 		for (int ii=0;ii<cands.size();ii++)
-			cands[ii].print_cand_file(fo,candidate_id+ii,ra,dec);
+			cands[ii].print_cand_file(fo,candidate_id+ii);
 
 	}
 
