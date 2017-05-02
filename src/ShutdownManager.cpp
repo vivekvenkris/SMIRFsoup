@@ -30,6 +30,7 @@ void ShutdownManager::manage_shutdown(int signal){
 
 		ShutdownManager::shutdown = true;
 		while(ShutdownManager::working) usleep(100 * 1000 );
+		exit(0);
 
 	}
 

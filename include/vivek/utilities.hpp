@@ -172,6 +172,8 @@ void sigproc_to_hhmmss(double sigproc,char* hhmmss);
 void sigproc_to_ddmmss(double sigproc,char* ddmmss);
 int ddmmss_to_sigproc (const char * ddmmss, double * sigproc);
 int hhmmss_to_sigproc (const char * hhmmss, double * sigproc);
+int hhmmss_to_double (const char * hhmmss, double * degree_value);
+int ddmmss_to_double (const char * ddmmss, double * degree_value);
 
 int get_number_from_server_name(std::string server_name, int* server);
 

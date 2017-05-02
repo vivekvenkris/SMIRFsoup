@@ -4,7 +4,6 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
-#include <stdio.h>
 std::string get_utc_str()
 {
   char buf[128];
