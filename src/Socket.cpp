@@ -73,7 +73,8 @@ bool Socket::bind ( const char * address, const int port )
     if (m_addr.sin_addr.s_addr == -1)
     {
       struct hostent * hp = gethostbyname (address);
-      memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr, hp->h_length);
+      memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr_list[0], hp->h_length);
+
     }
   }
 
@@ -161,7 +162,8 @@ bool Socket::connect ( const std::string address, const int port )
   if (m_addr.sin_addr.s_addr == -1)
   {
     struct hostent * hp = gethostbyname (address.c_str());
-    memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr, hp->h_length);
+    memcpy(&(m_addr.sin_addr.s_addr), hp->h_addr_list[0], hp->h_length);
+
   }
 
   if ( errno == EAFNOSUPPORT ) return false;
@@ -170,8 +172,12 @@ bool Socket::connect ( const std::string address, const int port )
 
   if ( status == 0 )
     return true;
-  else
+  else{
+
+	  std::cerr << "Client error status to connect to  " << address << " is " << errno << std::endl;
+
     return false;
+  }
 }
 
 void Socket::set_non_blocking ( const bool b )
