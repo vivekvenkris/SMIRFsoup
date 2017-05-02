@@ -22,7 +22,7 @@
 					<folderInfo id="com.nvidia.cuda.ide.on_path.configuration.debug.707237855." name="/" resourcePath="">
 						<toolChain errorParsers="" id="com.nvidia.cuda.tools.toolchain.on_path.exe.debug.1073833001" name="CUDA Toolkit on the path" superClass="com.nvidia.cuda.tools.toolchain.on_path.exe.debug">
 							<targetPlatform archList="all" binaryParser="com.nvidia.cuda.ide.elf;com.nvidia.cuda.ide.macho;com.nvidia.cuda.ide.cubin;org.eclipse.cdt.core.GNU_ELF" id="com.nvidia.cuda.ide.targetPlatform.390124719" isAbstract="false" name="Debug Platform" osList="linux,macosx" superClass="com.nvidia.cuda.ide.targetPlatform"/>
-							<builder buildPath="${workspace_loc:/SMIRFsoup}/Debug" enableAutoBuild="true" errorParsers="org.eclipse.cdt.core.GmakeErrorParser" id="com.nvidia.cuda.ide.builder.678145788" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CUDA Toolkit 8.0 Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="com.nvidia.cuda.ide.builder"/>
+							<builder buildPath="${workspace_loc:/SMIRFsoup}/Debug" enableAutoBuild="true" errorParsers="org.eclipse.cdt.core.GmakeErrorParser" id="com.nvidia.cuda.ide.builder.678145788" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CUDA Toolkit 8.0 Builder" parallelBuildOn="true" parallelizationNumber="8" superClass="com.nvidia.cuda.ide.builder"/>
 							<tool command="nvcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX} ${OUTPUT} ${INPUTS}" errorParsers="org.eclipse.cdt.core.VCErrorParser;nvcc.errorParser;org.eclipse.cdt.core.GCCErrorParser" id="nvcc.compiler.base.2041170811" name="NVCC Compiler" superClass="nvcc.compiler.base">
 								<option id="nvcc.compiler.deviceDebug.1748097187" name="Generate device debug information (-G)" superClass="nvcc.compiler.deviceDebug" value="false" valueType="boolean"/>
 								<option id="nvcc.compiler.option.level.1011653601" name="Generate host debug information (-g)" superClass="nvcc.compiler.option.level" value="false" valueType="boolean"/>
@@ -41,7 +41,7 @@
 								<option id="nvcc.compiler.disableWarnings.1578151859" name="Inhibit all warning messages (-w)" superClass="nvcc.compiler.disableWarnings" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.ftz.868223151" name="Flush denormal values to zero in single-precision FP operations (-ftz)" superClass="nvcc.compiler.ftz" value="true" valueType="boolean"/>
 								<option id="nvcc.compiler.usefastmath.1208826811" name="Make use of fast math library (-use_fast_math)" superClass="nvcc.compiler.usefastmath" value="true" valueType="boolean"/>
-								<option id="com.nvidia.cuda.ide.build.option1.2110958208" superClass="com.nvidia.cuda.ide.build.option1" value="/opt/gcc-4.9.4/bin" valueType="string"/>
+								<option id="com.nvidia.cuda.ide.build.option1.2110958208" name="Compiler Path (-ccbin)" superClass="com.nvidia.cuda.ide.build.option1" value="/opt/gcc-4.9.4/bin" valueType="string"/>
 								<inputType id="nvcc.compiler.input.cu.345066597" superClass="nvcc.compiler.input.cu"/>
 								<inputType id="nvcc.compiler.input.cpp.486929519" superClass="nvcc.compiler.input.cpp"/>
 								<inputType id="nvcc.compiler.input.c.106656160" superClass="nvcc.compiler.input.c"/>
