@@ -65,6 +65,23 @@ volatile int max_fanbeam_traversal = 0;
 
 volatile int freq_bin_width = 3; //(in 1/ (size* tsamp) units)
 
+class Peasoup{
+private:
+	vivek::Filterbank& sample_fil;
+	CmdLineOptions& args;
+	DispersionTrials<unsigned char>& trials;
+	AccelerationPlan& acc_plan;
+	Zapper* bzap;
+	UniquePoint* point;
+	CandidateCollection dm_cands;
+public:
+	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
+	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point){}
+
+	void do_peasoup();
+
+};
+
 class Worker {
 private:
 	DispersionTrials<unsigned char>& trials;

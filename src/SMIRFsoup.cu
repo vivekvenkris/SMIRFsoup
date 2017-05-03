@@ -45,12 +45,22 @@ int main(int argc, char **argv) {
 	vector<string>* string_points = new vector<string>();
 
 	/**
+	 *  define shutdown hooks
+	 */
+
+	std::signal(SIGINT, SIG_IGN);
+	std::signal(SIGTERM, ShutdownManager::manage_shutdown);
+
+
+	/**
 	 * Read all command line arguments
 	 */
 
 	CmdLineOptions args;
 	if (read_cmdline_options(args,argc,argv) == EXIT_FAILURE)
 		ErrorChecker::throw_error("Failed to parse command line arguments.");
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after parsing command line options");
 
 
 	/**
@@ -64,11 +74,8 @@ int main(int argc, char **argv) {
 
 	}
 
-	/**
-	 *  define shutdown hooks
-	 */
 
-	//std::signal(SIGINT, ShutdownManager::manage_shutdown);
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
 
 
 	/**
@@ -85,6 +92,9 @@ int main(int argc, char **argv) {
 	int result = populate_unique_points(abs_uniq_points_file_name.str(),unique_points, string_points, unique_fbs,args.point_num);
 
 	if(result == EXIT_FAILURE) 	ErrorChecker::throw_error("Problem reading unique points file. Aborting now.");
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading unique points file");
+
 
 
 	if(ConfigManager::this_host() == ConfigManager::edge_node()){
@@ -119,8 +129,22 @@ int main(int argc, char **argv) {
 
 		for(Rsyncer r: rsyncers) cerr << endl << r.getNode() << " ---- " << r.get_rsync_string() << endl;
 
-		for(Rsyncer r: rsyncers) { r.rsync(); pthread_join(r.getRsyncThread(),NULL); }
-		//for(Rsyncer r: rsyncers)  pthread_join(r.getRsyncThread(),NULL);
+		for(Rsyncer r: rsyncers) {
+
+			r.rsync();
+
+			if( ShutdownManager::shutdown_called() ){
+
+				pthread_kill(r.getRsyncThread(),SIGKILL);
+				ShutdownManager::shutdown("while rsyncing filterbanks");
+
+			}
+			pthread_join(r.getRsyncThread(),NULL);
+
+		}
+
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after rsyncing filterbanks");
+
 
 	}
 
@@ -195,7 +219,7 @@ int main(int argc, char **argv) {
 		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
 
 		if(fb_abs_path.empty()) {
-			cerr<< "Problem loading fb: " <<  fb << "fil file not found. Aborting now.";
+			cerr<< "Problem loading fb: " <<  fb << " fil file not found. Aborting now.";
 			return EXIT_FAILURE;
 		}
 
@@ -203,6 +227,14 @@ int main(int argc, char **argv) {
 		f->load_all_data();
 
 		fanbeams[fb] = f;
+
+		if( ShutdownManager::shutdown_called() ) {
+
+			for(auto &kv : fanbeams ) delete kv.second;
+
+			ShutdownManager::shutdown("while loading filterbanks");
+		}
+
 
 	}
 
@@ -278,6 +310,8 @@ int main(int argc, char **argv) {
 
 	}
 
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap inits");
+
 
 	/**
 	 * Stitch and peasouping section
@@ -326,6 +360,8 @@ int main(int argc, char **argv) {
 	stats.add_gpu_info(device_idxs);
 	stats.to_file(xml_filename.str());
 
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after peasoup inits");
+
 
 	map<int, DispersionTrials<unsigned char> > dedispersed_series_map;
 
@@ -343,10 +379,15 @@ int main(int argc, char **argv) {
 
 		dedispersed_series_map.insert(map<int, DispersionTrials<unsigned char> >::value_type(fb,trials));
 
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while dedispersion");
+
 		delete f;
 
 
 	}
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after dedispersion");
+
 
 	size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
 	int reduced_nsamples = nsamples - max_delay;
@@ -390,12 +431,16 @@ int main(int argc, char **argv) {
 
 			ptr+=num;
 			if(ptr >= reduced_nsamples) break;
+
+			if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
+
 		}
 
 		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
 		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point, candidate_id, &all_cands );
 
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
 
 		if(cand_size == -1) {
 			cerr << endl <<  "Problem peasouping line: " << point_index << endl;
@@ -435,6 +480,9 @@ int main(int argc, char **argv) {
 
 	cerr << "Attempting to call coincidencer" << endl;
 
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coincidencing");
+
+
 	coincidencer->init_this_candidates(distilled_cands);
 	coincidencer->send_candidates_to_all_nodes();
 	coincidencer->gather_all_candidates();
@@ -452,6 +500,41 @@ int main(int argc, char **argv) {
 
 
 
+void Peasoup::do_peasoup(){
+
+	int nthreads = 1;
+
+	DMDispenser dispenser(trials);
+
+	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap, point);
+	worker->start();
+	dm_cands.append(worker->dm_trial_cands.cands);
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
+
+
+	DMDistiller dm_still(args.freq_tol,true);
+	dm_cands.cands = dm_still.distill(dm_cands.cands);
+
+	HarmonicDistiller harm_still(args.freq_tol,args.max_harm,true,false);
+	dm_cands.cands = harm_still.distill(dm_cands.cands);
+
+	CandidateScorer cand_scorer(sample_fil.get_tsamp(),sample_fil.get_cfreq(), sample_fil.get_foff(), fabs(sample_fil.get_foff())*sample_fil.get_nchans());
+	cand_scorer.score_all(dm_cands.cands);
+
+	MultiFolder folder(dm_cands.cands,trials);
+
+	if(args.npdmp > 0 ) {
+		folder.fold_n(args.npdmp);
+	}
+
+	int new_size = min(args.limit,(int) dm_cands.cands.size());
+	dm_cands.cands.resize(new_size);
+
+	delete worker;
+
+}
+
 
 int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
 		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
@@ -462,15 +545,15 @@ int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<
 
 	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
 
-	FILE* fp;
-
-	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
-		cerr << "Problem opening candidate file for writing / appending." << endl;
-	}
-
-	dm_cands.print_cand_file(fp, candidate_id);
-
-	fclose(fp);
+//	FILE* fp;
+//
+//	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
+//		cerr << "Problem opening candidate file for writing / appending." << endl;
+//	}
+//
+//	dm_cands.print_cand_file(fp, candidate_id);
+//
+//	fclose(fp);
 
 	stats.to_file();
 
@@ -494,6 +577,8 @@ CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, Disper
 	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap, point);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
 
 
 	DMDistiller dm_still(args.freq_tol,true);
@@ -554,6 +639,7 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 
 		POP_NVTX_RANGE
 
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while getting zero DM birdies");
 
 		DedispersedTimeSeries<unsigned char> tim;
 		trials.get_idx(0,tim);
@@ -587,6 +673,9 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 
 		stats::normalise(pspec.get_data(),mean*size,std*size,size/2+1);
 
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while getting zero DM birdies");
+
+
 		HarmonicSums<float> sums(pspec,args.nharmonics);
 		HarmonicFolder harm_folder(sums);
 		harm_folder.fold(pspec);
@@ -600,6 +689,8 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 		HarmonicDistiller harm_finder(args.freq_tol,args.max_harm,false);
 		dm_cands.append(harm_finder.distill(trial_cands.cands));
 
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while getting zero DM birdies");
+
 	}
 	POP_NVTX_RANGE
 
@@ -607,6 +698,9 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 
 	CandidateCollection distilled_cands;
 	distilled_cands.cands = dm_still.distill(dm_cands.cands);
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after getting zero DM birdies");
+
 
 	return distilled_cands;
 }
@@ -829,6 +923,9 @@ void Worker::start(void)
 			if (args.verbose)
 				std::cerr << "Distilling harmonics" << std::endl;
 			accel_trial_cands.append(harm_finder.distill(updated_candidates.cands));
+
+			if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
+
 		}
 		POP_NVTX_RANGE
 		if (args.verbose)
