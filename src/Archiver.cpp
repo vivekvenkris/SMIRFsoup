@@ -12,75 +12,96 @@
 #include "MJD.h"
 
 
+
+using namespace std;
+
+key_t vivek::Archiver::out_key = -1;
+dada_hdu_t* vivek::Archiver::out_hdu = nullptr;
+unsigned int vivek::Archiver::nbuffers = -1;
+unsigned long vivek::Archiver::buffer_size = 0;
+
 vivek::Archiver::Archiver() {
-	out_hdu = 0;
-	log=0;
-	out_key = -1;
 }
+
+void vivek::Archiver::handle_archiver_segfault(int signal){
+
+	cerr << "Handling seg fault " << endl;
+
+	if(out_hdu != nullptr) {
+		cerr << "unlocking out_hdu " << endl;
+
+		if (dada_hdu_unlock_write (out_hdu) < 0) {
+			std::cerr << "close: cannot unlock output HDU" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+}
+
 int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 
-	out_hdu = dada_hdu_create (log);
+	out_hdu = dada_hdu_create (0);
+
 	dada_hdu_set_key(out_hdu, out_key);
 
 	if (dada_hdu_connect (out_hdu) < 0) {
-		std::cerr<<  "ERROR: could not connect to output HDU\n";
+		cerr<<  "ERROR: could not connect to output HDU" << endl;
 		return EXIT_FAILURE;
 	}
 	std::cerr << "connected to output HDU" <<std::endl;
 	if (dada_hdu_lock_write (out_hdu) < 0){
-		multilog (log, LOG_ERR, "open: could not lock write on output HDU\n");
-		return -1;
+		cerr << "open: could not lock write on output HDU\n" << endl;
+		return EXIT_FAILURE;
 	}
 	std::cerr << "locked for write" <<std::endl;
 
 	char * header = ipcbuf_get_next_write (out_hdu->header_block);
 	if (!header)
 	{
-		multilog (log, LOG_ERR, "open: could not get next header block\n");
+		cerr << "open: could not get next header block " <<  endl;
 		return -1;
 	}
 
-//	for(std::vector<vivek::HeaderParamBase*>::iterator it = f->header_params.begin(); it != f->header_params.end(); ++it) {
-//		vivek::HeaderParamBase* base = *it;
-//		const char* key = base->key.c_str();
-//
-//		if(!strcmp(key,HEADER_START) || !strcmp(key,HEADER_END) ) continue;
-//
-//		if(base->dtype == std::string(INT)) {
-//			int value = ( dynamic_cast<vivek::HeaderParam<int> * > (base))->value;
-//			if(ascii_header_set(header, key, "%d", value) <0) {
-//				std::stringstream message;
-//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
-//				multilog (log, LOG_ERR,message.str().c_str());
-//				return EXIT_FAILURE;
-//			}
-//		}
-//		else if(base->dtype == std::string(DOUBLE)) {
-//			double value  = ( dynamic_cast<vivek::HeaderParam<double> * > (base))->value;
-//			if(ascii_header_set(header, key, "%lf", value) <0) {
-//				std::stringstream message;
-//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
-//				multilog (log, LOG_ERR,message.str().c_str());
-//				return EXIT_FAILURE;
-//			}
-//		}
-//		else if(base->dtype == std::string(STRING)) {
-//			char* value  = ( dynamic_cast<vivek::HeaderParam<char*> * > (base))->value;
-//			if(ascii_header_set(header, key, "%s", value) <0) {
-//				std::stringstream message;
-//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
-//				multilog (log, LOG_ERR,message.str().c_str());
-//				return EXIT_FAILURE;
-//			}
-//		}
-//
-//
-//	}
-//	std::cerr << "wrote fil headers" <<std::endl;
+	//	for(std::vector<vivek::HeaderParamBase*>::iterator it = f->header_params.begin(); it != f->header_params.end(); ++it) {
+	//		vivek::HeaderParamBase* base = *it;
+	//		const char* key = base->key.c_str();
+	//
+	//		if(!strcmp(key,HEADER_START) || !strcmp(key,HEADER_END) ) continue;
+	//
+	//		if(base->dtype == std::string(INT)) {
+	//			int value = ( dynamic_cast<vivek::HeaderParam<int> * > (base))->value;
+	//			if(ascii_header_set(header, key, "%d", value) <0) {
+	//				std::stringstream message;
+	//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
+	//				multilog (log, LOG_ERR,message.str().c_str());
+	//				return EXIT_FAILURE;
+	//			}
+	//		}
+	//		else if(base->dtype == std::string(DOUBLE)) {
+	//			double value  = ( dynamic_cast<vivek::HeaderParam<double> * > (base))->value;
+	//			if(ascii_header_set(header, key, "%lf", value) <0) {
+	//				std::stringstream message;
+	//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
+	//				multilog (log, LOG_ERR,message.str().c_str());
+	//				return EXIT_FAILURE;
+	//			}
+	//		}
+	//		else if(base->dtype == std::string(STRING)) {
+	//			char* value  = ( dynamic_cast<vivek::HeaderParam<char*> * > (base))->value;
+	//			if(ascii_header_set(header, key, "%s", value) <0) {
+	//				std::stringstream message;
+	//				message << "could not set " << key <<"=" << value << " in outgoing header \n";
+	//				multilog (log, LOG_ERR,message.str().c_str());
+	//				return EXIT_FAILURE;
+	//			}
+	//		}
+	//
+	//
+	//	}
+	//	std::cerr << "wrote fil headers" <<std::endl;
 
 	if (ascii_header_set (header, "ORDER", "%s", "TF") < 0){
 		std::cerr<< "could not set ORDER=TF in outgoing header" <<std::endl;
-		multilog (log, LOG_ERR, "could not set ORDER=TF in outgoing header\n");
+		cerr << "could not set ORDER=TF in outgoing header" << endl;
 		return EXIT_FAILURE;
 	}
 
@@ -180,9 +201,9 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 	std::string utc_string =  mjd.datestr("%Y-%m-%d-%H:%M:%S");
 
 	if (ascii_header_set (header, "UTC_START", "%s",utc_string.c_str()) < 0){
-			std::cerr<< "" <<std::endl;
-			return EXIT_FAILURE;
-		}
+		std::cerr<< "" <<std::endl;
+		return EXIT_FAILURE;
+	}
 
 	if (ascii_header_set (header, "OBS_OFFSET", "%d",0) < 0){
 		std::cerr<< "" <<std::endl;
@@ -236,12 +257,12 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 
 		std::memcpy(block,&f->data[ptr],bytes_in);
 
-	    if(ipcio_close_block_write (out_hdu->data_block, bytes_in) <0 ) {
-	        multilog (log, LOG_ERR, "close: ipcio_close_block_write failed\n");
-	    }
+		if(ipcio_close_block_write (out_hdu->data_block, bytes_in) <0 ) {
+			cerr <<"close: ipcio_close_block_write failed" << endl;
+		}
 
 		std::cerr << "writing data " << bytes_in << " " << ptr <<std::endl;
-	    ptr += bytes_in;
+		ptr += bytes_in;
 	}
 	std::cerr << "wrote data " <<std::endl;
 
