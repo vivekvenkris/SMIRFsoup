@@ -141,6 +141,11 @@ std::transform(map->begin(), map->end(), values->begin(), value<K,V>);
 return EXIT_SUCCESS;
 }
 
+template<typename K, typename V> inline int get_key_vector_from_map( std::map<K,V>* map,std::vector<K>* keys ) {
+
+	std::transform(map->begin(), map->end(), keys->begin(), key<K,V>);
+	return EXIT_SUCCESS;
+}
 
 template<typename K, typename V> inline void clone_and_cast(K* src, V* dest, int n){
 	for(int i=0;i<n;i++) dest[i] =(V)src[i];
@@ -159,6 +164,16 @@ template<typename T> inline void scrunch(T* data,T* out, int n, int b){
 	for(int i=0;i<n;i+=b) {
 		out[j++]= get_scrunched_value<T>(&data[i],b);
 	}
+}
+
+template <typename K, typename V> V get_or_default (const  std::map <K,V> & m, const K & key, const V & defval ) {
+   typename std::map<K,V>::const_iterator it = m.find( key );
+   if ( it == m.end() ) {
+      return defval;
+   }
+   else {
+      return it->second;
+   }
 }
 
 int  file_open(FILE** file, const char* absolutename, const char* mode);

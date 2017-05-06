@@ -58,6 +58,7 @@ int  file_open(FILE** file, const char* absolutename, const char* mode) {
 }
 
 
+
 bool file_exists (const std::string& name) {
 
   struct stat buffer;
@@ -308,5 +309,7 @@ int ddmmss_to_double (const char * ddmmss, double * degree_value)
 
   return 0;
 }
+
+
 
 
