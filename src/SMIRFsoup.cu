@@ -60,6 +60,7 @@ int main(int argc, char **argv) {
 	if (read_cmdline_options(args,argc,argv) == EXIT_FAILURE)
 		ErrorChecker::throw_error("Failed to parse command line arguments.");
 
+
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after parsing command line options");
 
 
@@ -67,12 +68,14 @@ int main(int argc, char **argv) {
 	 *  Try to load configuration files to know where filter banks are. Abort if not found.
 	 */
 
-	if(ConfigManager::load_configs(args.host) == EXIT_FAILURE) {
+	if(ConfigManager::load_configs(args.host, args.beam_searcher_id) == EXIT_FAILURE) {
 
 		cerr << "Problem loading configuration files. Aborting." << endl;
 		return EXIT_FAILURE;
 
 	}
+
+	organize(args);
 
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
@@ -93,9 +96,12 @@ int main(int argc, char **argv) {
 
 	if(result == EXIT_FAILURE) 	ErrorChecker::throw_error("Problem reading unique points file. Aborting now.");
 
+	if(unique_points->empty() || unique_fbs->empty() ){
+			cerr << "Empty unique points file. Aborting now." << endl;
+			return EXIT_FAILURE;
+	}
+
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading unique points file");
-
-
 
 	if(ConfigManager::this_host() == ConfigManager::edge_node()){
 
@@ -165,7 +171,7 @@ int main(int argc, char **argv) {
 		else if(args.transfer_mode) {
 
 
-			if(args.verbose) cerr <<  __func__ << ": In transfer mode." <<endl;
+			if(args.verbose) cerr <<  __func__ << ": In transfer mode to key: "<< std::hex << args.out_key <<endl;
 
 			if(args.out_key < 0 ) {
 
@@ -176,6 +182,8 @@ int main(int argc, char **argv) {
 
 			stringstream candidate_file_stream;
 			candidate_file_stream << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
+
+			cerr<< "Reading candidate file: " << candidate_file_stream.str() << endl;
 
 			string candidate_file = candidate_file_stream.str();
 
@@ -192,11 +200,11 @@ int main(int argc, char **argv) {
 				vector<UniquePoint*> points;
 				points.push_back(unique_points->at(args.point_num));
 
-				stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, args.out_dir);
+				stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "fold_out");
 
 			}
 
-			stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, args.out_dir);
+			stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "fold_out");
 
 
 		}
@@ -227,6 +235,7 @@ int main(int argc, char **argv) {
 		f->load_all_data();
 
 		fanbeams[fb] = f;
+
 
 		if( ShutdownManager::shutdown_called() ) {
 
@@ -395,12 +404,11 @@ int main(int argc, char **argv) {
 	CandidateCollection all_cands;
 
 	int point_index= 1;
-	int candidate_id = 1;
 
 	for(vector<UniquePoint*>::iterator it = unique_points->begin(); it!=unique_points->end();++it){
 		UniquePoint* point = *it;
 
-		cerr<< "\r Processing point " <<  point_index << " / " <<  unique_points->size();
+		cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
 
 		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
 
@@ -438,31 +446,27 @@ int main(int argc, char **argv) {
 
 		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
-		int cand_size = peasoup_multi(ffb,args,trials,stats,acc_plan, bzap, point_index, point, candidate_id, &all_cands );
+		Peasoup peasoup(*ffb, args,trials, acc_plan, bzap, point, all_cands);
+		peasoup.do_peasoup();
 
 		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
-
-		if(cand_size == -1) {
-			cerr << endl <<  "Problem peasouping line: " << point_index << endl;
-			return EXIT_FAILURE;
-		}
-
-		candidate_id += cand_size;
 
 		delete[] data;
 		point_index++;
 
-
 	}
+
 
 	cerr << endl;
 
-	for(int i=0; i< all_cands.cands.size(); i++ ){
+	cerr << "Outside peasouping" << endl;
 
-		Candidate c = all_cands.cands[i];
-
-		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
-	}
+//	for(int i=0; i< all_cands.cands.size(); i++ ){
+//
+//		Candidate c = all_cands.cands[i];
+//
+//		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
+//	}
 
 	DMDistiller dm_still(args.freq_tol,true);
 
@@ -470,15 +474,16 @@ int main(int argc, char **argv) {
 	distilled_cands.cands = dm_still.distill(all_cands.cands);
 
 
-	for(int i=0; i< distilled_cands.cands.size(); i++ ){
-
-		Candidate c = distilled_cands.cands[i];
-
-		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "DM: '" << c.dm <<"' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
-	}
+//	for(int i=0; i< distilled_cands.cands.size(); i++ ){
+//
+//		Candidate c = distilled_cands.cands[i];
+//
+//		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "DM: '" << c.dm <<"' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
+//	}
 
 
 	cerr << "Attempting to call coincidencer" << endl;
+
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coincidencing");
 
@@ -499,14 +504,23 @@ int main(int argc, char **argv) {
 }
 
 
+void* Peasoup::peasoup_thread(void* ptr){
+
+	Peasoup* peasoup = reinterpret_cast<Peasoup*>(ptr);
+	peasoup->do_peasoup();
+	return NULL;
+}
+
 
 void Peasoup::do_peasoup(){
+
+	CandidateCollection dm_cands;
 
 	int nthreads = 1;
 
 	DMDispenser dispenser(trials);
 
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap, point);
+	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
 
@@ -530,6 +544,8 @@ void Peasoup::do_peasoup(){
 
 	int new_size = min(args.limit,(int) dm_cands.cands.size());
 	dm_cands.cands.resize(new_size);
+
+	all_cands.append(dm_cands);
 
 	delete worker;
 
@@ -574,7 +590,7 @@ CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, Disper
 
 	DMDispenser dispenser(trials);
 
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size,args.gpu_device, bzap, point);
+	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
 
@@ -621,7 +637,7 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 
 	CandidateCollection dm_cands;
 
-	cudaSetDevice(args.gpu_device);
+	cudaSetDevice(ConfigManager::this_gpu_device());
 
 	CuFFTerR2C r2cfft(size);
 	CuFFTerC2R c2rfft(size);
