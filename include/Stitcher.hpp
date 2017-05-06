@@ -37,6 +37,7 @@
 #include "SMIRFdef.hpp"
 #include "ConfigManager.hpp"
 #include <utils/cmdline.hpp>
+#include <csignal>
 
 
 class Stitcher{

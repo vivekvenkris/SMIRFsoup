@@ -54,8 +54,11 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 
 	if(args.verbose) cerr<< "successfully copied header" <<endl;
 
+	int last_traversal = point->traversals->size() - 1;
 
-	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
+	int traversal_num = 0;
+
+	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++, traversal_num++ ){
 
 		Traversal* traversal = *it2;
 		int fb = traversal->fanbeam;
@@ -63,6 +66,11 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 		vivek::Filterbank* f  = fanbeams->at(fb);
 		cerr << f->file_name << endl;
 		stitched_filterbank->store_data(f->data, traversal->startSample, traversal->numSamples);
+
+		if(traversal_num  == last_traversal ) {
+			cerr << "last extra bits: from "<< (traversal->startSample + traversal->numSamples) << " " << f->nsamps - (traversal->startSample + traversal->numSamples);
+			stitched_filterbank->store_data(f->data, traversal->startSample + traversal->numSamples, f->nsamps - (traversal->startSample + traversal->numSamples));
+		}
 
 	}
 
@@ -75,16 +83,19 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 
 vivek::Filterbank* Stitcher::stitch(UniquePoint* point){
 
-	vector<int>* uniqFBs;
+	vector<int> uniqFBs;
 	for(vector<Traversal*>::iterator it = point->traversals->begin(); it!=point->traversals->end(); it++){
 
 		Traversal* t = *it;
-		if(find(uniqFBs->begin(), uniqFBs->end(),(int)t->fanbeam)== uniqFBs->end()) uniqFBs->push_back((int)t->fanbeam);
+		if(find(uniqFBs.begin(), uniqFBs.end(),(int)t->fanbeam)== uniqFBs.end()) uniqFBs.push_back((int)t->fanbeam);
 
 	}
+
+	cerr << " uniqFBs->size(): " << uniqFBs.size() << endl;
+
 	map<int,vivek::Filterbank*> fanbeams;
 
-	for( vector<int>::iterator fbIterator = uniqFBs->begin(); fbIterator != uniqFBs->end(); fbIterator++){
+	for( vector<int>::iterator fbIterator = uniqFBs.begin(); fbIterator != uniqFBs.end(); fbIterator++){
 		int fb = (int)*(fbIterator);
 
 		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
@@ -164,19 +175,26 @@ int Stitcher::stitch_and_dump(vector<UniquePoint*>* uniqPoints, vector<int>* uni
 int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_key,
 		string candidates_file, string dspsr_out_dir){
 
+	std::signal(SIGSEGV, vivek::Archiver::handle_archiver_segfault);
+	vivek::Archiver::out_key =  out_key;
+	vivek::Archiver::nbuffers = ConfigManager::shared_mem_nbuffers();
+	vivek::Archiver::buffer_size = ConfigManager::shared_mem_buffer_size();
+
 	vector<string> lines;
-
-
 
 	FILE* fp;
 
 	file_open(&fp,candidates_file.c_str(),"r");
 
-	stringload (&lines, fp);
+	loadlines(candidates_file.c_str(),lines);
+
+	string header = "";
+
+	for(string line : lines) if(line.find("SOURCE") != line.npos)  header = line;
 
 	int line_number = 1;
 
-	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it){
+	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it ,line_number++){
 
 		UniquePoint* point = *points_it;
 
@@ -194,56 +212,61 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 				candidates.push_back(line);
 			}
 
-			if(line.find("SOURCE") != line.npos){
-				candidates.insert(candidates.begin(),line);
-			}
+		}
 
+		cerr << "point: " << point->ra << " " << point->dec <<  " has "<< candidates.size() << " candidates" << endl;
+
+		if(candidates.empty()) 	continue;
+
+		for( string s: candidates) cerr << s << endl;
+
+
+		string file_name = get_candidate_file_name(args.out_dir, line_number, args.host).c_str();
+
+		cerr << "Writing candidate file: " << file_name << " for dspsr." << endl;
+
+		ofstream candidates_file_stream(file_name.c_str() , ofstream::out);
+
+		if (!candidates_file_stream.good()){
+
+			cerr<< "could not open '" << file_name << "' in mode '"
+					<< "w " << "' Errorno: " << strerror(errno) << endl;
+			return EXIT_FAILURE;
 
 		}
 
-		if(candidates.size() > 1) {
+		candidates_file_stream << header << endl;
 
-			string file_name = get_candidate_file_name(args.out_dir, line_number, args.host).c_str();
+		std::ostream_iterator<std::string> output_iterator(candidates_file_stream, "\n");
+		std::copy(candidates.begin(), candidates.end(), output_iterator);
 
-			ofstream candidates_file_stream(file_name.c_str() , ofstream::out);
+		candidates_file_stream.close();
 
-			if (!candidates_file_stream.good()){
-
-				cerr<< "could not open '" << file_name << "' in mode '"
-								<< "w " << "' Errorno: " << strerror(errno) << endl;
-				return EXIT_FAILURE;
-
-			}
-
-		    std::ostream_iterator<std::string> output_iterator(candidates_file_stream, "\n");
-		    std::copy(candidates.begin(), candidates.end(), output_iterator);
-
-		    candidates_file_stream.close();
-
-			if(!file_exists(file_name)){
-				cerr << " File: " << file_name << " Not written properly." <<endl;
-				return EXIT_FAILURE;
-			}
-
-
-
-			vivek::Filterbank* stitched_filterbank = stitch(point);
-
-			if(stitched_filterbank == nullptr) return EXIT_FAILURE;
-
-			stitched_filterbank->add_to_header(CANDIDATE_FILENAME_KEY,STRING,file_name);
-			stitched_filterbank->add_to_header(OUT_DIR_KEY,STRING,dspsr_out_dir);
-
-			vivek::Archiver archiver(out_key);
-			archiver.transfer_fil_to_DADA_buffer(stitched_filterbank);
-
-
-			stitched_filterbank->unload_filterbank();
-
-			delete stitched_filterbank;
+		if(!file_exists(file_name)){
+			cerr << " File: " << file_name << " Not written properly." <<endl;
+			return EXIT_FAILURE;
 		}
 
-		line_number++;
+
+
+		vivek::Filterbank* stitched_filterbank = stitch(point);
+
+		if(stitched_filterbank == nullptr) {
+			cerr << "Problem creating stitched filterbank." << endl;
+			return EXIT_FAILURE;
+		}
+
+		stitched_filterbank->add_to_header(CANDIDATE_FILENAME_KEY,STRING,file_name);
+		stitched_filterbank->add_to_header(OUT_DIR_KEY,STRING,dspsr_out_dir);
+
+		vivek::Archiver::transfer_fil_to_DADA_buffer(stitched_filterbank);
+
+
+
+		//stitched_filterbank->unload_filterbank();
+
+		delete stitched_filterbank;
+
 	}
 
 	return EXIT_SUCCESS;
