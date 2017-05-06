@@ -73,10 +73,12 @@ private:
 	AccelerationPlan& acc_plan;
 	Zapper* bzap;
 	UniquePoint* point;
-	CandidateCollection dm_cands;
+	CandidateCollection& all_cands;
 public:
 	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
-	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point){}
+	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands){}
+
+	static void* peasoup_thread(void* ptr);
 
 	void do_peasoup();
 
@@ -98,8 +100,11 @@ public:
 	CandidateCollection dm_trial_cands;
 
 	Worker(DispersionTrials<unsigned char>& trials, DMDispenser& manager,
-			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, int device,Zapper* bzap, UniquePoint* point)
-	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),device(device),bzap(bzap),point(point){}
+			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, Zapper* bzap, UniquePoint* point)
+	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),bzap(bzap),point(point){
+
+		device = ConfigManager::this_gpu_device();
+	}
 
 	void start(void);
 };
