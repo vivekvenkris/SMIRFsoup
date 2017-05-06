@@ -69,9 +69,9 @@ struct CmdLineOptions {
 
   std::string host;
 
-  int gpu_device;
-
   bool dynamic_birdies;
+
+  int beam_searcher_id;
 
 
 
@@ -80,6 +80,7 @@ struct CmdLineOptions {
 
 std::string get_utc_str();
 int read_cmdline_options(CmdLineOptions& args, int argc, char **argv);
+int organize(CmdLineOptions& args);
 
 
 

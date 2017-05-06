@@ -27,13 +27,15 @@
 
 #include "ConfigManager.hpp"
 #include "utils/cmdline.hpp"
+#include "ShutdownManager.hpp"
+
 
 
 class Coincidencer {
 
 private:
 
-	std::map<std::string, CandidateCollection> candidate_collection_map;
+	std::map<int, CandidateCollection> candidate_collection_map;
 
 	CandidateCollection other_candidates;
 

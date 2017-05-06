@@ -18,26 +18,30 @@ void* Coincidencer::candidates_client(void* ptr){
 
 	cerr << "Coincidencer Client:: Sending " << coincidencer->this_candidates.cands.size() << "candidates to all other nodes." << endl;
 
+	for( const auto &host_bs_map_pair : ConfigManager::coincidencer_ports()) {
 
-	for( string node: ConfigManager::other_active_nodes() ){
+		string node = host_bs_map_pair.first;
 
-		cerr << " client trying to communicate to " << node << endl;
+		for( const auto &bs_map_pair : host_bs_map_pair.second){
 
-		ostringstream oss;
+			cerr << " client trying to communicate to " << node << "for BS" << bs_map_pair.first << endl;
 
-		ClientSocket client_socket ( node , ConfigManager::coincidencer_ports().at(node) );
-		//ClientSocket client_socket ( "127.0.0.1", ConfigManager::coincidencer_ports().at(ConfigManager::this_host()) );
+			ClientSocket client_socket ( node , ConfigManager::coincidencer_ports().at(node).at(bs_map_pair.first) );
 
-		oss << ConfigManager::this_host() << " ";
-		//oss << node << " ";
+			ostringstream oss;
+			oss << "BS_"<< ConfigManager::this_bs() << " "<< coincidencer->this_candidates << " ";
+			client_socket << oss.str();
 
-		oss << coincidencer->this_candidates << " ";
 
-		//cerr << "sending  " << oss.str().size()  << " characters" << endl;
+			if( ShutdownManager::shutdown_called() ) {
+				cerr << "Coincidencer client terminating on shutdown call. " << endl;
+				return NULL;
+			}
 
-		client_socket << oss.str();
+		}
 
 	}
+
 
 	cerr << "Client sent data to everyone. " <<  endl;
 
@@ -57,11 +61,22 @@ void* Coincidencer::candidates_server(void* ptr){
 
 	Coincidencer*  coincidencer = reinterpret_cast< Coincidencer* >(ptr);
 
-	cerr << "Starting server on localhost:" << ConfigManager::coincidencer_ports().at(ConfigManager::this_host()) << endl;
+	cerr << "Starting server on localhost:" << ConfigManager::this_coincidencer_port()<< endl;
 
-	ServerSocket* socket = new ServerSocket( "any" , ConfigManager::coincidencer_ports().at(ConfigManager::this_host()));
+	ServerSocket* socket = new ServerSocket( "any" ,ConfigManager::this_coincidencer_port() ) ;
 
 	while(true){
+
+		if( ShutdownManager::shutdown_called() ) {
+			cerr << "Coincidencer server terminating on shutdown call. " << endl;
+			return NULL;
+		}
+
+		if(coincidencer->candidate_collection_map.size() == ConfigManager::other_active_bs().size()){
+			cerr << "Server got data from all nodes. Quitting server" <<  endl;
+			break;
+		}
+
 
 		int waiting_connections = socket->select(5.0);
 
@@ -85,22 +100,29 @@ void* Coincidencer::candidates_server(void* ptr){
 
 				//cerr << "iss:" << iss.str() << endl;
 
-				string node;
-				iss >> node;
+				string bs_string;
+				iss >> bs_string;
+
+				int bs = -1;
+
+				size_t position = bs_string.find("_");
+				if(position != bs_string.npos){
+					bs = ::atoi(bs_string.substr(position).c_str());
+				}
+
+
+				if(bs < 0) {
+					cerr << "Incorrect BS string received: " <<  bs_string << ". Expected format is BS_<num>. Quitting server" << endl;
+					return NULL;
+				}
 
 				CandidateCollection cc;
 				iss >> cc;
 
-
-
 				coincidencer->other_candidates.cands.insert(coincidencer->other_candidates.cands.end(), cc.cands.begin(), cc.cands.end());
 
-				coincidencer->candidate_collection_map.insert(map<string,CandidateCollection>::value_type(node,cc));
+				coincidencer->candidate_collection_map.insert(map<int,CandidateCollection>::value_type(bs,cc));
 
-				if(coincidencer->candidate_collection_map.size() == ConfigManager::other_active_nodes().size()){
-					cerr << "Server got data from all nodes. Quitting server" <<  endl;
-					break;
-				}
 
 			} catch (SocketException& e) {
 

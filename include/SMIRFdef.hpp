@@ -9,18 +9,17 @@
 #define SMIRFDEF_H_
 
 
-#define CENTRAL_BEAM_NUM 177
-#define BEAM_PROCESSOR_PREFIX "BP"
-#define BEAM_DIR_PREFIX "BEAM_"
-#define SMIRF_BASE "/data/mopsr/smirf"
-#define ARCHIVES_BASE "/data/mopsr/rawdata"
-#define FB_DIR "FB"
+//#define CENTRAL_BEAM_NUM 177
+//#define BEAM_PROCESSOR_PREFIX "BP"
+//#define BEAM_DIR_PREFIX "BEAM_"
+//#define SMIRF_BASE "/data/mopsr/smirf"
+//#define ARCHIVES_BASE "/data/mopsr/rawdata"
+//#define FB_DIR "FB"
+
+#define SMIRF_CFG "/home/vivek/SMIRF/config/smirf.cfg"
+#define MAX_CONFIG_LEN_BYTES 65536
 #define PATH_SEPERATOR "/"
 
-#define MOPSR_BP_CFG "/home/dada/linux_64/share/mopsr_bp.cfg"
-#define MOPSR_BP_CORNERTURN_CFG "/home/dada/linux_64/share/mopsr_bp_cornerturn.cfg"
-#define MOPSR_CFG "/home/dada/linux_64/share/mopsr.cfg"
-#define SMIRF_CFG "/home/vivek/SMIRF/config/smirf.cfg"
 
 #define POINT_RA 0
 #define POINT_DEC 1
