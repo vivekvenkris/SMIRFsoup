@@ -6,40 +6,17 @@
  */
 
 #include "ShutdownManager.hpp"
-#include <csignal>
-#include <unistd.h>
-#include <cstdlib>
-
-ShutdownManager::ShutdownManager() {
-	// TODO Auto-generated constructor stub
-
-}
-
-ShutdownManager::~ShutdownManager() {
-	// TODO Auto-generated destructor stub
-}
 
 
+using namespace std;
 
-volatile bool ShutdownManager::shutdown = false;
-volatile bool ShutdownManager::working  = false;
+volatile std::atomic_bool ShutdownManager::exit_request(false);
 
-void ShutdownManager::manage_shutdown(int signal){
+void ShutdownManager::manage_shutdown(int signal){	if( signal == SIGTERM ) exit_request = true; }
 
-	if( signal ==SIGINT ){
+bool ShutdownManager::shutdown_called(){ return exit_request == true; }
 
-		ShutdownManager::shutdown = true;
-		while(ShutdownManager::working) usleep(100 * 1000 );
-		exit(0);
-
-	}
-
-	else if( signal == SIGTERM ) {
-
-		/* introduce some grace here */
-
-		exit(0);
-
-	}
-
+void ShutdownManager::shutdown(string position){
+	cerr << "Shut down requested at position:  " << position << endl;
+	std::exit(EXIT_FAILURE);
 }

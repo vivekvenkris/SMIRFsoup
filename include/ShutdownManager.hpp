@@ -8,15 +8,22 @@
 #ifndef SHUTDOWNMANAGER_H_
 #define SHUTDOWNMANAGER_H_
 
+#include <atomic>
+#include <csignal>
+#include <unistd.h>
+#include <cstdlib>
+#include <string>
+#include <iostream>
 class ShutdownManager {
 public:
 
-	ShutdownManager();
-	virtual ~ShutdownManager();
+	ShutdownManager() {};
+	virtual ~ShutdownManager() {};
 
-	static volatile bool shutdown;
-	static volatile bool working;
+	static volatile std::atomic_bool exit_request;
 	static void manage_shutdown(int signal);
+	static bool shutdown_called();
+	static void shutdown(std::string position);
 };
 
 #endif /* SHUTDOWNMANAGER_H_ */
