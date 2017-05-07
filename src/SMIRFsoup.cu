@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
 
 		vector<Rsyncer> rsyncers;
 
-		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_fb_map() ){
+		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_bs_fb_map() ){
 			string node = node_bp_map_pair.first;
 
 			if(node == ConfigManager::edge_node() ) continue;
@@ -793,7 +793,7 @@ void* launch_worker_thread(void* ptr){
 void Worker::start(void)
 {
 
-	cudaSetDevice(device);
+	cudaSetDevice(ConfigManager::this_gpu_device());
 	Stopwatch pass_timer;
 	pass_timer.start();
 

@@ -50,8 +50,8 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 				false, 2000.0, "float", cmd);
 
 		TCLAP::ValueArg<float> arg_dm_tol("", "dm_tol",
-				"DM smearing tolerance (default=1.10)",
-				false, 1.10, "float",cmd);
+				"DM smearing tolerance (default=1.25)",
+				false, 1.25, "float",cmd);
 
 		TCLAP::ValueArg<float> arg_dm_pulse_width("", "dm_pulse_width",
 				"Minimum pulse width for which dm_tol is valid. (default= 327.68 us)",
