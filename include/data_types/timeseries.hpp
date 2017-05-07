@@ -380,6 +380,9 @@ protected:
   TimeSeriesContainer(T* data_ptr, unsigned int nsamps, float tsamp, unsigned int count)
     :data_ptr(data_ptr),nsamps(nsamps),tsamp(tsamp),count(count){}
   
+  TimeSeriesContainer(unsigned int nsamps, float tsamp, unsigned int count)
+    :data_ptr(nullptr),nsamps(nsamps),tsamp(tsamp),count(count){}
+
 public:
   /*!
   \brief Get the number of timeseries in the container.
@@ -416,6 +419,11 @@ public:
     \return Pointer to timeseries data.
   */
   T* get_data(void){return data_ptr;}
+
+  void set_data(T* data){this->data_ptr = data;}
+
+
+
 };
 
 
@@ -456,6 +464,13 @@ public:
      this->max_delay = max_delay;
    }
   
+  DispersionTrials(unsigned int nsamps, float tsamp, std::vector<float> dm_list_in, size_t max_delay)
+  :TimeSeriesContainer<T>(nsamps,tsamp, (unsigned int)dm_list_in.size())
+   {
+	  dm_list.swap(dm_list_in);
+	  this->max_delay = max_delay;
+   }
+
   /*!
     \brief Select the Nth timeseries.
     
