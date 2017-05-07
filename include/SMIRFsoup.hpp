@@ -93,7 +93,6 @@ private:
 	Zapper* bzap;
 	UniquePoint* point;
 	unsigned int size;
-	int device;
 	std::map<std::string,Stopwatch> timers;
 
 public:
@@ -102,8 +101,6 @@ public:
 	Worker(DispersionTrials<unsigned char>& trials, DMDispenser& manager,
 			AccelerationPlan& acc_plan, CmdLineOptions& args, unsigned int size, Zapper* bzap, UniquePoint* point)
 	:trials(trials),manager(manager),acc_plan(acc_plan),args(args),size(size),bzap(bzap),point(point){
-
-		device = ConfigManager::this_gpu_device();
 	}
 
 	void start(void);
