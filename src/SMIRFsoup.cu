@@ -75,7 +75,11 @@ int main(int argc, char **argv) {
 
 	}
 
-	organize(args);
+	if( organize(args) == EXIT_FAILURE) {
+		cerr << "Problem with input args and (or) config files.Aborting now." << endl;
+		return EXIT_FAILURE;
+	}
+
 
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
@@ -107,7 +111,7 @@ int main(int argc, char **argv) {
 
 		vector<Rsyncer> rsyncers;
 
-		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_fb_map() ){
+		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_bs_fb_map() ){
 			string node = node_bp_map_pair.first;
 
 			if(node == ConfigManager::edge_node() ) continue;
@@ -321,7 +325,6 @@ int main(int argc, char **argv) {
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap inits");
 
-
 	/**
 	 * Stitch and peasouping section
 	 * ******************************
@@ -350,28 +353,28 @@ int main(int argc, char **argv) {
 	 * parameters for the xml output file.
 	 *
 	 */
-	stringstream xml_filename;
-	xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
+//	stringstream xml_filename;
+//	xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
+//
+//	OutputFileWriter stats(xml_filename.str());
+//	stats.add_misc_info();
+//	stats.add_search_parameters(args);
+//	stats.add_dm_list(dm_list);
+//	stats.add_acc_list(acc_list);
+//
+//
+//
+//	if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
 
-	OutputFileWriter stats(xml_filename.str());
-	stats.add_misc_info();
-	stats.add_search_parameters(args);
-	stats.add_dm_list(dm_list);
-	stats.add_acc_list(acc_list);
-
-
-
-	if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
-
-	vector<int> device_idxs;
-	for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
-
-	stats.add_gpu_info(device_idxs);
-	stats.to_file(xml_filename.str());
+//	vector<int> device_idxs;
+//	for (int device_idx=0;device_idx< 1;device_idx++) device_idxs.push_back(device_idx);
+//
+//	stats.add_gpu_info(device_idxs);
+//	stats.to_file(xml_filename.str());
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after peasoup inits");
 
-
+	cerr << "Dedispersing for all DM trials.. " << endl;
 	map<int, DispersionTrials<unsigned char> > dedispersed_series_map;
 
 	for(vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
@@ -399,61 +402,72 @@ int main(int argc, char **argv) {
 
 
 	size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
-	int reduced_nsamples = nsamples - max_delay;
+	unsigned int reduced_nsamples = nsamples - max_delay;
 
 	CandidateCollection all_cands;
 
 	int point_index= 1;
+
 
 	for(vector<UniquePoint*>::iterator it = unique_points->begin(); it!=unique_points->end();++it){
 		UniquePoint* point = *it;
 
 		cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
 
-		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
+		Peasoup peasoup(*ffb, args,dm_list,reduced_nsamples, acc_plan, bzap, point, all_cands, max_delay);
 
-		int ptr = 0;
+		cerr << "Peasoup created" << endl;
 
-		for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
-			Traversal* traversal = *it2;
+		stitch_1D(dedispersed_series_map, point, reduced_nsamples, dm_list, peasoup.get_data());
 
-			int startSample = traversal->startSample;
+		cerr << "stitched" << endl;
 
-			size_t num = (startSample+traversal->numSamples > (reduced_nsamples)) ? (reduced_nsamples - startSample) : traversal->numSamples;
+//		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
 
-			DispersionTrials<unsigned char> dedispTimeseries4FB = dedispersed_series_map.find(traversal->fanbeam)->second;
 
-			int trialIndex = 0;
+//		int ptr = 0;
+//
+//		for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
+//			Traversal* traversal = *it2;
+//
+//			int startSample = traversal->startSample;
+//
+//			size_t num = (startSample+traversal->numSamples > (reduced_nsamples)) ? (reduced_nsamples - startSample) : traversal->numSamples;
+//
+//			DispersionTrials<unsigned char> dedispTimeseries4FB = dedispersed_series_map.find(traversal->fanbeam)->second;
+//
+//			int trialIndex = 0;
+//
+//			for( int trial = 0; trial < dm_list.size(); trial++){
+//
+//				DedispersedTimeSeries<unsigned char> trialTimeSeries = dedispTimeseries4FB[trial];
+//
+//				unsigned char* trial_data = trialTimeSeries.get_data();
+//
+//				memcpy(&data[trialIndex + ptr],&trial_data[startSample],sizeof(unsigned char)*num);
+//
+//				trialIndex+= reduced_nsamples;
+//
+//			}
+//
+//			ptr+=num;
+//			if(ptr >= reduced_nsamples) break;
+//
+//			if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
+//
+//		}
 
-			for( int trial = 0; trial < dm_list.size(); trial++){
+//		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
 
-				DedispersedTimeSeries<unsigned char> trialTimeSeries = dedispTimeseries4FB[trial];
-
-				unsigned char* trial_data = trialTimeSeries.get_data();
-
-				memcpy(&data[trialIndex + ptr],&trial_data[startSample],sizeof(unsigned char)*num);
-
-				trialIndex+= reduced_nsamples;
-
-			}
-
-			ptr+=num;
-			if(ptr >= reduced_nsamples) break;
-
-			if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
-
-		}
-
-		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
-
-		Peasoup peasoup(*ffb, args,trials, acc_plan, bzap, point, all_cands);
+//		Peasoup peasoup(*ffb, args,trials, acc_plan, bzap, point, all_cands);
 		peasoup.do_peasoup();
 
 		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
 
-		delete[] data;
+		//delete[] data;
 		point_index++;
 
+		if(point_index > 10 ) exit(0);
 	}
 
 
@@ -504,6 +518,42 @@ int main(int argc, char **argv) {
 }
 
 
+void stitch_1D( map<int, DispersionTrials<unsigned char> >& dedispersed_series_map, UniquePoint* point, unsigned int reduced_nsamples, vector<float>& dm_list, unsigned char* data ){
+
+	int ptr = 0;
+
+	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
+		Traversal* traversal = *it2;
+
+		int startSample = traversal->startSample;
+
+		size_t num = (startSample+traversal->numSamples > (reduced_nsamples)) ? (reduced_nsamples - startSample) : traversal->numSamples;
+
+		DispersionTrials<unsigned char> dedispTimeseries4FB = dedispersed_series_map.find(traversal->fanbeam)->second;
+
+		int trialIndex = 0;
+
+		for( int trial = 0; trial < dm_list.size(); trial++){
+
+			DedispersedTimeSeries<unsigned char> trialTimeSeries = dedispTimeseries4FB[trial];
+
+			unsigned char* trial_data = trialTimeSeries.get_data();
+
+			memcpy(&data[trialIndex + ptr],&trial_data[startSample],sizeof(unsigned char)*num);
+
+			trialIndex+= reduced_nsamples;
+
+		}
+
+		ptr+=num;
+		if(ptr >= reduced_nsamples) break;
+
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
+
+	}
+
+}
+
 void* Peasoup::peasoup_thread(void* ptr){
 
 	Peasoup* peasoup = reinterpret_cast<Peasoup*>(ptr);
@@ -513,6 +563,10 @@ void* Peasoup::peasoup_thread(void* ptr){
 
 
 void Peasoup::do_peasoup(){
+
+	cerr << "In do peasoup" << endl;
+
+	DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data ,sample_fil.nsamps ,sample_fil.tsamp, dm_list, (size_t) (sample_fil.nsamps - reduced_nsamples));
 
 	CandidateCollection dm_cands;
 
@@ -536,11 +590,11 @@ void Peasoup::do_peasoup(){
 	CandidateScorer cand_scorer(sample_fil.get_tsamp(),sample_fil.get_cfreq(), sample_fil.get_foff(), fabs(sample_fil.get_foff())*sample_fil.get_nchans());
 	cand_scorer.score_all(dm_cands.cands);
 
-	MultiFolder folder(dm_cands.cands,trials);
-
-	if(args.npdmp > 0 ) {
-		folder.fold_n(args.npdmp);
-	}
+//	MultiFolder folder(dm_cands.cands,trials);
+//
+//	if(args.npdmp > 0 ) {
+//		folder.fold_n(args.npdmp);
+//	}
 
 	int new_size = min(args.limit,(int) dm_cands.cands.size());
 	dm_cands.cands.resize(new_size);
@@ -548,78 +602,6 @@ void Peasoup::do_peasoup(){
 	all_cands.append(dm_cands);
 
 	delete worker;
-
-}
-
-
-int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
-
-	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap,point);
-
-	string name = get_candidate_file_name(args.out_dir, -1, args.host );
-
-	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
-
-//	FILE* fp;
-//
-//	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
-//		cerr << "Problem opening candidate file for writing / appending." << endl;
-//	}
-//
-//	dm_cands.print_cand_file(fp, candidate_id);
-//
-//	fclose(fp);
-
-	stats.to_file();
-
-
-	all_cands->append(dm_cands);
-
-	return dm_cands.cands.size();
-
-
-}
-
-CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
-		Zapper* bzap, UniquePoint* point) {
-
-	CandidateCollection dm_cands;
-
-	int nthreads = 1;
-
-	DMDispenser dispenser(trials);
-
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
-	worker->start();
-	dm_cands.append(worker->dm_trial_cands.cands);
-
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
-
-
-	DMDistiller dm_still(args.freq_tol,true);
-	dm_cands.cands = dm_still.distill(dm_cands.cands);
-
-	HarmonicDistiller harm_still(args.freq_tol,args.max_harm,true,false);
-	dm_cands.cands = harm_still.distill(dm_cands.cands);
-
-	CandidateScorer cand_scorer(fil->get_tsamp(),fil->get_cfreq(), fil->get_foff(), fabs(fil->get_foff())*fil->get_nchans());
-	cand_scorer.score_all(dm_cands.cands);
-
-	MultiFolder folder(dm_cands.cands,trials);
-
-	if(args.npdmp > 0 ) {
-		folder.fold_n(args.npdmp);
-	}
-
-	int new_size = min(args.limit,(int) dm_cands.cands.size());
-	dm_cands.cands.resize(new_size);
-
-	delete worker;
-
-	return dm_cands;
-
-
 
 }
 
@@ -638,6 +620,7 @@ CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams
 	CandidateCollection dm_cands;
 
 	cudaSetDevice(ConfigManager::this_gpu_device());
+	ErrorChecker::check_cuda_error("cuda set device");
 
 	CuFFTerR2C r2cfft(size);
 	CuFFTerC2R c2rfft(size);
@@ -793,7 +776,8 @@ void* launch_worker_thread(void* ptr){
 void Worker::start(void)
 {
 
-	cudaSetDevice(device);
+	cudaSetDevice(ConfigManager::this_gpu_device());
+	ErrorChecker::check_cuda_error("cuda set device");
 	Stopwatch pass_timer;
 	pass_timer.start();
 
@@ -962,8 +946,78 @@ void Worker::start(void)
 
 
 
-
-
+//
+//
+//int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
+//		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
+//
+//	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap,point);
+//
+//	string name = get_candidate_file_name(args.out_dir, -1, args.host );
+//
+//	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
+//
+////	FILE* fp;
+////
+////	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
+////		cerr << "Problem opening candidate file for writing / appending." << endl;
+////	}
+////
+////	dm_cands.print_cand_file(fp, candidate_id);
+////
+////	fclose(fp);
+//
+//	stats.to_file();
+//
+//
+//	all_cands->append(dm_cands);
+//
+//	return dm_cands.cands.size();
+//
+//
+//}
+//
+//CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
+//		Zapper* bzap, UniquePoint* point) {
+//
+//	CandidateCollection dm_cands;
+//
+//	int nthreads = 1;
+//
+//	DMDispenser dispenser(trials);
+//
+//	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
+//	worker->start();
+//	dm_cands.append(worker->dm_trial_cands.cands);
+//
+//	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
+//
+//
+//	DMDistiller dm_still(args.freq_tol,true);
+//	dm_cands.cands = dm_still.distill(dm_cands.cands);
+//
+//	HarmonicDistiller harm_still(args.freq_tol,args.max_harm,true,false);
+//	dm_cands.cands = harm_still.distill(dm_cands.cands);
+//
+//	CandidateScorer cand_scorer(fil->get_tsamp(),fil->get_cfreq(), fil->get_foff(), fabs(fil->get_foff())*fil->get_nchans());
+//	cand_scorer.score_all(dm_cands.cands);
+//
+////	MultiFolder folder(dm_cands.cands,trials);
+////
+////	if(args.npdmp > 0 ) {
+////		folder.fold_n(args.npdmp);
+////	}
+//
+//	int new_size = min(args.limit,(int) dm_cands.cands.size());
+//	dm_cands.cands.resize(new_size);
+//
+//	delete worker;
+//
+//	return dm_cands;
+//
+//
+//
+//}
 
 
 

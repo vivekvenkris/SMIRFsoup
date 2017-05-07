@@ -69,18 +69,42 @@ class Peasoup{
 private:
 	vivek::Filterbank& sample_fil;
 	CmdLineOptions& args;
-	DispersionTrials<unsigned char>& trials;
+	//DispersionTrials<unsigned char>& trials;
 	AccelerationPlan& acc_plan;
 	Zapper* bzap;
 	UniquePoint* point;
 	CandidateCollection& all_cands;
+	unsigned char* data;
+	std::vector<float>& dm_list;
+	unsigned int reduced_nsamples;
 public:
-	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
-	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands){}
+//	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
+//	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands){}
+
+	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, std::vector<float> dm_list,	unsigned int reduced_nsamples,
+		AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands, size_t max_delay): sample_fil(sample_fil),args(args),dm_list(dm_list),
+				reduced_nsamples(reduced_nsamples),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands),
+				data (new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.")) {
+
+
+	}
 
 	static void* peasoup_thread(void* ptr);
 
 	void do_peasoup();
+
+	virtual ~Peasoup(){
+		delete[] data;
+	}
+
+	unsigned char* getData() const {
+		return data;
+	}
+
+	unsigned char* get_data() {
+		return data;
+	}
+
 
 };
 
@@ -106,6 +130,9 @@ public:
 	void start(void);
 };
 
+
+void stitch_1D(std::map<int, DispersionTrials<unsigned char> >& dedispersed_series_map, UniquePoint* point,
+		unsigned int reduced_nsamples, std::vector<float>& dm_list, unsigned char* data );
 
 int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>* unique_points,std::vector<std::string>* str_points,
 		std::vector<int>* unique_fbs, int point_index );
