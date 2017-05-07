@@ -78,6 +78,8 @@ public:
 	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
 	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands){}
 
+
+
 	static void* peasoup_thread(void* ptr);
 
 	void do_peasoup();
@@ -111,15 +113,15 @@ int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>*
 		std::vector<int>* unique_fbs, int point_index );
 
 
+//
+//int peasoup_multi(vivek::Filterbank* filobj, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
+//					AccelerationPlan& acc_plan,Zapper* bzap, int pt_num,UniquePoint* point,
+//					int candidate_id,  CandidateCollection* all_cands);
 
-int peasoup_multi(vivek::Filterbank* filobj, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-					AccelerationPlan& acc_plan,Zapper* bzap, int pt_num,UniquePoint* point,
-					int candidate_id,  CandidateCollection* all_cands);
 
 
-
-CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
-							Zapper* bzap, UniquePoint* point);
+//CandidateCollection peasoup(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
+//							Zapper* bzap, UniquePoint* point);
 
 CandidateCollection get_zero_dm_candidates(std::map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args);
 
@@ -128,7 +130,8 @@ std::string get_candidate_file_name( std::string dir, int point_idx, std::string
 
 std::string get_fil_file_path( std::string base, std::string utc, int fanbeam);
 
-
+void stitch_1D(std::map<int, DispersionTrials<unsigned char> >& dedispersed_series_map, UniquePoint* point,
+		unsigned int reduced_nsamples, std::vector<float>& dm_list, unsigned char* data );
 
 
 #endif

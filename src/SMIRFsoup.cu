@@ -405,48 +405,19 @@ int main(int argc, char **argv) {
 
 	int point_index= 1;
 
-	for(vector<UniquePoint*>::iterator it = unique_points->begin(); it!=unique_points->end();++it){
-		UniquePoint* point = *it;
+	DispersionTrials<unsigned char> stitched_trials = DispersionTrials<unsigned char>(nsamples,tsamp, dm_list,max_delay);
+
+	for(UniquePoint* point: *unique_points){
 
 		cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
 
 		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
 
-		int ptr = 0;
+		stitch_1D(dedispersed_series_map, point, reduced_nsamples, dm_list, data);
 
-		for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
-			Traversal* traversal = *it2;
+		stitched_trials.set_data(data);
 
-			int startSample = traversal->startSample;
-
-			size_t num = (startSample+traversal->numSamples > (reduced_nsamples)) ? (reduced_nsamples - startSample) : traversal->numSamples;
-
-			DispersionTrials<unsigned char> dedispTimeseries4FB = dedispersed_series_map.find(traversal->fanbeam)->second;
-
-			int trialIndex = 0;
-
-			for( int trial = 0; trial < dm_list.size(); trial++){
-
-				DedispersedTimeSeries<unsigned char> trialTimeSeries = dedispTimeseries4FB[trial];
-
-				unsigned char* trial_data = trialTimeSeries.get_data();
-
-				memcpy(&data[trialIndex + ptr],&trial_data[startSample],sizeof(unsigned char)*num);
-
-				trialIndex+= reduced_nsamples;
-
-			}
-
-			ptr+=num;
-			if(ptr >= reduced_nsamples) break;
-
-			if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
-
-		}
-
-		DispersionTrials<unsigned char> trials = DispersionTrials<unsigned char>(data,nsamples,tsamp, dm_list,max_delay);
-
-		Peasoup peasoup(*ffb, args,trials, acc_plan, bzap, point, all_cands);
+		Peasoup peasoup(*ffb, args,stitched_trials, acc_plan, bzap, point, all_cands);
 		peasoup.do_peasoup();
 
 		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
@@ -552,76 +523,45 @@ void Peasoup::do_peasoup(){
 }
 
 
-int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
-		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
-
-	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap,point);
-
-	string name = get_candidate_file_name(args.out_dir, -1, args.host );
-
-	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
-
-//	FILE* fp;
-//
-//	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
-//		cerr << "Problem opening candidate file for writing / appending." << endl;
-//	}
-//
-//	dm_cands.print_cand_file(fp, candidate_id);
-//
-//	fclose(fp);
-
-	stats.to_file();
 
 
-	all_cands->append(dm_cands);
+void stitch_1D( map<int, DispersionTrials<unsigned char> >& dedispersed_series_map, UniquePoint* point, unsigned int reduced_nsamples, vector<float>& dm_list, unsigned char* data ){
 
-	return dm_cands.cands.size();
+	int ptr = 0;
 
+	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
+		Traversal* traversal = *it2;
 
-}
+		int startSample = traversal->startSample;
 
-CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
-		Zapper* bzap, UniquePoint* point) {
+		size_t num = (startSample+traversal->numSamples > (reduced_nsamples)) ? (reduced_nsamples - startSample) : traversal->numSamples;
 
-	CandidateCollection dm_cands;
+		DispersionTrials<unsigned char> dedispTimeseries4FB = dedispersed_series_map.find(traversal->fanbeam)->second;
 
-	int nthreads = 1;
+		int trialIndex = 0;
 
-	DMDispenser dispenser(trials);
+		for( int trial = 0; trial < dm_list.size(); trial++){
 
-	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
-	worker->start();
-	dm_cands.append(worker->dm_trial_cands.cands);
+			DedispersedTimeSeries<unsigned char> trialTimeSeries = dedispTimeseries4FB[trial];
 
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
+			unsigned char* trial_data = trialTimeSeries.get_data();
 
+			memcpy(&data[trialIndex + ptr],&trial_data[startSample],sizeof(unsigned char)*num);
 
-	DMDistiller dm_still(args.freq_tol,true);
-	dm_cands.cands = dm_still.distill(dm_cands.cands);
+			trialIndex+= reduced_nsamples;
 
-	HarmonicDistiller harm_still(args.freq_tol,args.max_harm,true,false);
-	dm_cands.cands = harm_still.distill(dm_cands.cands);
+		}
 
-	CandidateScorer cand_scorer(fil->get_tsamp(),fil->get_cfreq(), fil->get_foff(), fabs(fil->get_foff())*fil->get_nchans());
-	cand_scorer.score_all(dm_cands.cands);
+		ptr+=num;
+		if(ptr >= reduced_nsamples) break;
 
-	MultiFolder folder(dm_cands.cands,trials);
+		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while stitching");
 
-	if(args.npdmp > 0 ) {
-		folder.fold_n(args.npdmp);
 	}
 
-	int new_size = min(args.limit,(int) dm_cands.cands.size());
-	dm_cands.cands.resize(new_size);
-
-	delete worker;
-
-	return dm_cands;
-
-
-
 }
+
+
 
 CandidateCollection get_zero_dm_candidates(map<int,vivek::Filterbank*>* fanbeams, CmdLineOptions& args){
 
@@ -957,13 +897,80 @@ void Worker::start(void)
 
 
 
+//int peasoup_multi(vivek::Filterbank* fil,CmdLineOptions& args, DispersionTrials<unsigned char>& trials, OutputFileWriter& stats,
+//		AccelerationPlan& acc_plan, Zapper* bzap, int pt_num, UniquePoint* point, int candidate_id, CandidateCollection* all_cands){
+//
+//	CandidateCollection dm_cands  = peasoup(fil,args,trials,acc_plan,bzap,point);
+//
+//	string name = get_candidate_file_name(args.out_dir, -1, args.host );
+//
+//	stats.add_candidates(dm_cands.cands,pt_num,point->ra,point->dec);
+//
+////	FILE* fp;
+////
+////	if(file_open(&fp, name.c_str(),"a")  == EXIT_FAILURE){
+////		cerr << "Problem opening candidate file for writing / appending." << endl;
+////	}
+////
+////	dm_cands.print_cand_file(fp, candidate_id);
+////
+////	fclose(fp);
+//
+//	stats.to_file();
+//
+//
+//	all_cands->append(dm_cands);
+//
+//	return dm_cands.cands.size();
+//
+//
+//}
 
 
 
 
 
-
-
+//CandidateCollection peasoup(vivek::Filterbank* fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials, AccelerationPlan& acc_plan,
+//		Zapper* bzap, UniquePoint* point) {
+//
+//	CandidateCollection dm_cands;
+//
+//	int nthreads = 1;
+//
+//	DMDispenser dispenser(trials);
+//
+//	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
+//	worker->start();
+//	dm_cands.append(worker->dm_trial_cands.cands);
+//
+//	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
+//
+//
+//	DMDistiller dm_still(args.freq_tol,true);
+//	dm_cands.cands = dm_still.distill(dm_cands.cands);
+//
+//	HarmonicDistiller harm_still(args.freq_tol,args.max_harm,true,false);
+//	dm_cands.cands = harm_still.distill(dm_cands.cands);
+//
+//	CandidateScorer cand_scorer(fil->get_tsamp(),fil->get_cfreq(), fil->get_foff(), fabs(fil->get_foff())*fil->get_nchans());
+//	cand_scorer.score_all(dm_cands.cands);
+//
+//	MultiFolder folder(dm_cands.cands,trials);
+//
+//	if(args.npdmp > 0 ) {
+//		folder.fold_n(args.npdmp);
+//	}
+//
+//	int new_size = min(args.limit,(int) dm_cands.cands.size());
+//	dm_cands.cands.resize(new_size);
+//
+//	delete worker;
+//
+//	return dm_cands;
+//
+//
+//
+//}
 
 
 
