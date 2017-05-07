@@ -10,7 +10,7 @@
 
 using namespace std;
 
-volatile std::atomic_bool ShutdownManager::exit_request(false);
+volatile bool ShutdownManager::exit_request = false;
 
 void ShutdownManager::manage_shutdown(int signal){	if( signal == SIGTERM ) exit_request = true; }
 
