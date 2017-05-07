@@ -251,7 +251,7 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 	while(ptr < f->data_bytes){
 
 		long difference = f->data_bytes - ptr;
-		bytes_in =  (difference > SHARED_BUFFER_SIZE)? SHARED_BUFFER_SIZE : difference;
+		bytes_in =  (difference > buffer_size )? buffer_size : difference;
 
 		char* block = ipcio_open_block_write (out_hdu->data_block, &out_block_id);
 

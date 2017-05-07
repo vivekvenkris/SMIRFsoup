@@ -33,8 +33,6 @@
 #include <iostream>
 #include <cstring>
 
-#define SHARED_BUFFER_SIZE 16 * 1024 * 1024
-
 const char* const CANDIDATE_FILENAME_KEY = "CAND_FILE";
 const char* const OUT_DIR_KEY = "FOLD_OUT";
 
