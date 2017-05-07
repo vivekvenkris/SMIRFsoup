@@ -15,7 +15,7 @@ char ConfigManager::mopsr_config[MAX_CONFIG_LEN_BYTES];
 
 std::string ConfigManager::config_root = "";
 
-std::map< std::string, std::map< int, std::pair< int, int > > > ConfigManager::node_bp_fb_map_;
+std::map< std::string, std::map< int, std::pair< int, int > > > ConfigManager::node_bp_bs_fb_map_;
 
 std::map< std::string, std::map< int, int> > ConfigManager::coincidencer_ports_;
 
@@ -247,11 +247,11 @@ int ConfigManager::read_mopsr_bp_config(){
 
 
 		}
-		ConfigManager::node_bp_fb_map_.insert(map<string, map < int, pair< int, int> > >::value_type(inode,bp_map) );
+		ConfigManager::node_bp_bs_fb_map_.insert(map<string, map < int, pair< int, int> > >::value_type(inode,bp_map) );
 
 	}
 
-	for( pair< string, map < int, pair< int, int> > > bp_map : node_bp_fb_map_){
+	for( pair< string, map < int, pair< int, int> > > bp_map : node_bp_bs_fb_map_){
 		string current  = (bp_map.first == this_host_)? " <current node> ": " ";
 		cerr << "Node:" <<  bp_map.first << current << endl;
 		for( pair< int, pair < int, int> > fb_map: bp_map.second ){
@@ -430,6 +430,9 @@ int ConfigManager::read_mopsr_bs_config(){
 		return EXIT_FAILURE;
 
 	}
+	this_gpu_device_ = 0;
+
+	cerr << "Using GPU device: " << this_gpu_device_ << endl;
 
 
 	return EXIT_SUCCESS;
@@ -577,7 +580,7 @@ string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam){
 
 string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam, string host){
 
-	map<int, pair<int,int> > beam_map = node_bp_fb_map_.at(host);
+	map<int, pair<int,int> > beam_map = node_bp_bs_fb_map_.at(host);
 
 	map<int, vector<int> >::iterator map_it;
 	for(pair<int, pair< int, int> > bp_kv: beam_map){

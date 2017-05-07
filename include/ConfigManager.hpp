@@ -36,7 +36,7 @@ private:
 
 	static std::string config_root;
 
-	static std::map< std::string, std::map< int, std::pair< int, int > > > node_bp_fb_map_;
+	static std::map< std::string, std::map< int, std::pair< int, int > > > node_bp_bs_fb_map_;
 
 	static std::map< std::string, std::map< int, int> > coincidencer_ports_;
 
@@ -75,7 +75,7 @@ private:
 public:
 
 	static const std::map< std::string, std::vector< int > >& other_active_node_bs_map() { return other_active_node_bs_map_; }
-	static const std::map< std::string, std::map< int, std::pair< int, int > > >& node_bp_fb_map() {return node_bp_fb_map_;}
+	static const std::map< std::string, std::map< int, std::pair< int, int > > >& node_bp_bs_fb_map() {return node_bp_bs_fb_map_;}
 	static const std::vector< int >& other_active_bs() {return other_active_bs_; }
 	static const int this_gpu_device() {return this_gpu_device_; }
 	static int total_num_fanbeams() { return total_num_fanbeams_; }
