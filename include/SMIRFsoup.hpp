@@ -76,13 +76,16 @@ private:
 	CandidateCollection& all_cands;
 public:
 	Peasoup(vivek::Filterbank& sample_fil, CmdLineOptions& args, DispersionTrials<unsigned char>& trials,
-	AccelerationPlan& acc_plan, Zapper* bzap, UniquePoint* point, CandidateCollection& all_cands): sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(point),all_cands(all_cands){}
+	AccelerationPlan& acc_plan, Zapper* bzap, CandidateCollection& all_cands):
+		sample_fil(sample_fil),args(args),trials(trials),acc_plan(acc_plan) , bzap(bzap), point(nullptr),all_cands(all_cands){}
 
 
 
 	static void* peasoup_thread(void* ptr);
 
 	void do_peasoup();
+
+	void set_point(UniquePoint* point) { this->point = point; }
 
 };
 

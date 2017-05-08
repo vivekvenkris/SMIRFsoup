@@ -81,6 +81,7 @@ int main(int argc, char **argv) {
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
 
 
+
 	/**
 	 * Get and populate uniq points file.
 	 */
@@ -97,13 +98,17 @@ int main(int argc, char **argv) {
 	if(result == EXIT_FAILURE) 	ErrorChecker::throw_error("Problem reading unique points file. Aborting now.");
 
 	if(unique_points->empty() || unique_fbs->empty() ){
-			cerr << "Empty unique points file. Aborting now." << endl;
-			return EXIT_FAILURE;
+		cerr << "Empty unique points file. Aborting now." << endl;
+		return EXIT_FAILURE;
 	}
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading unique points file");
 
+	cerr << "Successfully loaded unique points file." << endl;
+
 	if(ConfigManager::this_host() == ConfigManager::edge_node()){
+
+		cerr << "Filterbanks have to be rsynced before start" << endl;
 
 		vector<Rsyncer> rsyncers;
 
@@ -135,343 +140,398 @@ int main(int argc, char **argv) {
 
 		for(Rsyncer r: rsyncers) cerr << endl << r.getNode() << " ---- " << r.get_rsync_string() << endl;
 
-		for(Rsyncer r: rsyncers) {
+		int num_active = rsyncers.size();
+
+		cerr << "Starting " << num_active << "rsyncs" <<  endl;
+
+		for(Rsyncer r: rsyncers){
 
 			r.rsync();
-
-			if( ShutdownManager::shutdown_called() ){
-
-				pthread_kill(r.getRsyncThread(),SIGKILL);
-				ShutdownManager::shutdown("while rsyncing filterbanks");
-
-			}
 			pthread_join(r.getRsyncThread(),NULL);
-
 		}
 
-		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after rsyncing filterbanks");
 
+
+
+//		while(num_active != 0) {
+//
+//			rsyncers.erase( std::remove_if(rsyncers.begin(), rsyncers.end(), [](const Rsyncer & r) {
+//
+//				if( ShutdownManager::shutdown_called() ){
+//
+//					if(r.get_status()  == RUNNING){
+//
+//						cerr << "trying to kill rsync to " << r.getNode() << endl;
+//						pthread_kill(r.getRsyncThread(),SIGKILL);
+//						return true;
+//					}
+//				}
+//
+//				if( ! r.is_running()) {
+//					cerr << "joining rsync for node" << r.getNode() << endl;
+//					pthread_join(r.getRsyncThread(),NULL);
+//					return true;
+//				}
+//				return false; }),
+//
+//				rsyncers.end()
+//			);
+//
+//			num_active = rsyncers.size();
+//
+//			cerr << "Number of active rsyncs: " << num_active << endl;
+//
+//			sleep(2);
+//
+//
+//		}
+
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after rsyncing filterbanks");
+
+
+}
+
+/**
+ * If dump or transfer mode, do and return. Do not peasoup.
+ */
+if(args.dump_mode || args.transfer_mode){
+
+	Stitcher stitcher(args);
+
+	if(args.dump_mode) {
+
+		if(args.verbose) cerr <<  __func__ << ": In dump mode." <<endl;
+
+		stitcher.stitch_and_dump(unique_points, unique_fbs);
 
 	}
-
-	/**
-	 * If dump or transfer mode, do and return. Do not peasoup.
-	 */
-	if(args.dump_mode || args.transfer_mode){
-
-		Stitcher stitcher(args);
-
-		if(args.dump_mode) {
-
-			if(args.verbose) cerr <<  __func__ << ": In dump mode." <<endl;
-
-			stitcher.stitch_and_dump(unique_points, unique_fbs);
-
-		}
-		else if(args.transfer_mode) {
+	else if(args.transfer_mode) {
 
 
-			if(args.verbose) cerr <<  __func__ << ": In transfer mode to key: "<< std::hex << args.out_key <<endl;
+		if(args.verbose) cerr <<  __func__ << ": In transfer mode to key: "<< std::hex << args.out_key <<endl;
 
-			if(args.out_key < 0 ) {
+		if(args.out_key < 0 ) {
 
-				cerr <<  __func__ << ": Need a valid shared memory key. Specify using the -k option. Aborting now." << endl;
-				return EXIT_FAILURE;
-
-			}
-
-			stringstream candidate_file_stream;
-			candidate_file_stream << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
-
-			cerr<< "Reading candidate file: " << candidate_file_stream.str() << endl;
-
-			string candidate_file = candidate_file_stream.str();
-
-			if(!file_exists(candidate_file)) {
-
-				cerr << __func__ << ": Candidate file: '" << candidate_file << "' is not found. Aborting now." << endl;
-				exit(EXIT_FAILURE);
-
-			}
-
-
-			if(args.point_num >=0) {
-
-				vector<UniquePoint*> points;
-				points.push_back(unique_points->at(args.point_num));
-
-				stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "fold_out");
-
-			}
-
-			stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "fold_out");
-
-
-		}
-		return EXIT_SUCCESS;
-	}
-
-
-	/**
-	 * Load all fanbeams to RAM.
-	 */
-
-
-	cerr << "Loading all fanbeams to RAM" << std::endl;
-
-	std::map<int,vivek::Filterbank*> fanbeams;
-
-	for( vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
-		int fb = (int)*(fb_iterator);
-
-		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
-
-		if(fb_abs_path.empty()) {
-			cerr<< "Problem loading fb: " <<  fb << " fil file not found. Aborting now.";
+			cerr <<  __func__ << ": Need a valid shared memory key. Specify using the -k option. Aborting now." << endl;
 			return EXIT_FAILURE;
+
 		}
 
-		vivek::Filterbank* f = new vivek::Filterbank(fb_abs_path, FILREAD, args.verbose);
-		f->load_all_data();
+		stringstream candidate_file_stream;
+		candidate_file_stream << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
 
-		fanbeams[fb] = f;
+		cerr<< "Reading candidate file: " << candidate_file_stream.str() << endl;
 
+		string candidate_file = candidate_file_stream.str();
 
-		if( ShutdownManager::shutdown_called() ) {
+		if(!file_exists(candidate_file)) {
 
-			for(auto &kv : fanbeams ) delete kv.second;
-
-			ShutdownManager::shutdown("while loading filterbanks");
-		}
-
-
-	}
-
-	cerr<< fanbeams.size() << " Fanbeams loaded" << endl;
-
-	/**
-	 * Use the first filterbank to get common header details.
-	 */
-
-
-	vivek::Filterbank* ffb = fanbeams.begin() -> second ;
-
-	long data_bytes = ffb -> data_bytes;
-	int nsamples = ffb -> get_nsamps();
-	double tsamp = ffb -> get_tsamp();
-	double cfreq = ffb -> get_cfreq();
-	double foff =  ffb -> get_foff();
-
-	if(args.size ==0) args.size = Utils::prev_power_of_two(ffb->get_nsamps());
-
-
-
-	/**
-	 *  Get zero DM candidates that happen on all beams and use this as a birdies list.
-	 */
-
-	Zapper* bzap = NULL;
-
-
-
-	if ( !args.zapfilename.empty() ) {
-
-		cerr << "Using Zap file: " << args.zapfilename << endl;
-
-		bzap = new Zapper(args.zapfilename);
-	}
-
-	if(args.dynamic_birdies) {
-
-		cerr << "Generating dynamic birdies list" << endl;
-
-		CandidateCollection zero_dm_candidates = get_zero_dm_candidates(&fanbeams,args);
-
-		map<float,float> zap_map;
-
-
-		float bin_width = freq_bin_width/(args.size * ffb->tsamp);
-
-		for(int i=0; i< zero_dm_candidates.cands.size(); i++){
-
-			Candidate c = zero_dm_candidates.cands[i];
-
-			cerr << "Birdie '" << i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' W: '" << bin_width << "' nfb: " <<
-					c.assoc.size()<< endl;
-
-			if(c.assoc.size() > max_fanbeam_traversal){
-
-				zap_map.insert( map<float,float>::value_type(c.freq,bin_width));
-
-			}
+			cerr << __func__ << ": Candidate file: '" << candidate_file << "' is not found. Aborting now." << endl;
+			exit(EXIT_FAILURE);
 
 		}
 
 
-		if(! zap_map.empty()) {
+		if(args.point_num >=0) {
 
-			if(bzap) bzap->append_from_map(&zap_map);
-			else 	 bzap = new Zapper(&zap_map);
+			vector<UniquePoint*> points;
+			points.push_back(unique_points->at(args.point_num));
+
+			stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "fold_out");
 
 		}
 
-		if(args.verbose) cerr << "Found "<< zap_map.size() << " birdies" << endl;
-
-	}
-
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap inits");
-
-
-	/**
-	 * Stitch and peasouping section
-	 * ******************************
-	 * Use the first filter bank to extract header information and create DM and Acceleration trial list that can
-	 * be reused for all stitches.
-	 */
-
-	/**
-	 * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
-	 */
-	Coincidencer* coincidencer = new Coincidencer(args, freq_bin_width/(args.size * ffb->tsamp), max_fanbeam_traversal );
-
-
-	vector<float> acc_list;
-	AccelerationPlan acc_plan(args.acc_start, args.acc_end, args.acc_tol, args.acc_pulse_width, args.size, tsamp, cfreq, foff);
-	acc_plan.generate_accel_list(0.0,acc_list);
-
-	vector<float> dm_list;
-	Dedisperser ffb_dedisperser(*ffb,1);
-	ffb_dedisperser.generate_dm_list(args.dm_start,args.dm_end,args.dm_pulse_width,args.dm_tol);
-	dm_list = ffb_dedisperser.get_dm_list();
-
-
-	/**
-	 *
-	 * parameters for the xml output file.
-	 *
-	 */
-	stringstream xml_filename;
-	xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
-
-	OutputFileWriter stats(xml_filename.str());
-	stats.add_misc_info();
-	stats.add_search_parameters(args);
-	stats.add_dm_list(dm_list);
-	stats.add_acc_list(acc_list);
-
-
-
-	if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
-
-	vector<int> device_idxs;
-	for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
-
-	stats.add_gpu_info(device_idxs);
-	stats.to_file(xml_filename.str());
-
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after peasoup inits");
-
-
-	map<int, DispersionTrials<unsigned char> > dedispersed_series_map;
-
-	for(vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
-		int fb = (int)*(fb_iterator);
-
-		vivek::Filterbank* f = fanbeams.at(fb);
-
-		Dedisperser dedisperser(*f,1);
-		dedisperser.set_dm_list(dm_list);
-
-		PUSH_NVTX_RANGE("Dedisperse",3)
-		DispersionTrials<unsigned char> trials = dedisperser.dedisperse();
-		POP_NVTX_RANGE
-
-		dedispersed_series_map.insert(map<int, DispersionTrials<unsigned char> >::value_type(fb,trials));
-
-		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while dedispersion");
-
-		delete f;
+		stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "fold_out");
 
 
 	}
+	return EXIT_SUCCESS;
+}
 
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after dedispersion");
+
+/**
+ * Load all fanbeams to RAM.
+ */
 
 
-	size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
-	int reduced_nsamples = nsamples - max_delay;
+cerr << "Loading all fanbeams to RAM" << std::endl;
 
-	CandidateCollection all_cands;
+std::map<int,vivek::Filterbank*> fanbeams;
 
-	int point_index= 1;
+for( vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
+	int fb = (int)*(fb_iterator);
 
-	DispersionTrials<unsigned char> stitched_trials = DispersionTrials<unsigned char>(nsamples,tsamp, dm_list,max_delay);
+	string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
 
-	for(UniquePoint* point: *unique_points){
+	if(fb_abs_path.empty()) {
+		cerr<< "Problem loading fb: " <<  fb << " fil file not found. Aborting now.";
+		return EXIT_FAILURE;
+	}
 
-		cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
+	vivek::Filterbank* f = new vivek::Filterbank(fb_abs_path, FILREAD, args.verbose);
+	f->load_all_data();
 
-		unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
+	fanbeams[fb] = f;
 
-		stitch_1D(dedispersed_series_map, point, reduced_nsamples, dm_list, data);
 
-		stitched_trials.set_data(data);
+	if( ShutdownManager::shutdown_called() ) {
 
-		Peasoup peasoup(*ffb, args,stitched_trials, acc_plan, bzap, point, all_cands);
-		peasoup.do_peasoup();
+		for(auto &kv : fanbeams ) delete kv.second;
 
-		if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
+		ShutdownManager::shutdown("while loading filterbanks");
+	}
 
-		delete[] data;
-		point_index++;
+
+}
+
+cerr<< fanbeams.size() << " Fanbeams loaded" << endl;
+
+/**
+ * Use the first filterbank to get common header details.
+ */
+
+
+vivek::Filterbank* ffb = fanbeams.begin() -> second ;
+
+long data_bytes = ffb -> data_bytes;
+int nsamples = ffb -> get_nsamps();
+double tsamp = ffb -> get_tsamp();
+double cfreq = ffb -> get_cfreq();
+double foff =  ffb -> get_foff();
+
+if(args.size ==0) args.size = Utils::prev_power_of_two(ffb->get_nsamps());
+
+
+
+/**
+ *  Get zero DM candidates that happen on all beams and use this as a birdies list.
+ */
+
+Zapper* bzap = NULL;
+
+
+
+if ( !args.zapfilename.empty() ) {
+
+	cerr << "Using Zap file: " << args.zapfilename << endl;
+
+	bzap = new Zapper(args.zapfilename);
+}
+
+if(args.dynamic_birdies) {
+
+	cerr << "Generating dynamic birdies list" << endl;
+
+	CandidateCollection zero_dm_candidates = get_zero_dm_candidates(&fanbeams,args);
+
+	map<float,float> zap_map;
+
+
+	float bin_width = freq_bin_width/(args.size * ffb->tsamp);
+
+	for(int i=0; i< zero_dm_candidates.cands.size(); i++){
+
+		Candidate c = zero_dm_candidates.cands[i];
+
+		cerr << "Birdie '" << i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' W: '" << bin_width << "' nfb: " <<
+				c.assoc.size()<< endl;
+
+		if(c.assoc.size() > max_fanbeam_traversal){
+
+			zap_map.insert( map<float,float>::value_type(c.freq,bin_width));
+
+		}
 
 	}
 
 
-	cerr << endl;
+	if(! zap_map.empty()) {
 
-	cerr << "Outside peasouping" << endl;
+		if(bzap) bzap->append_from_map(&zap_map);
+		else 	 bzap = new Zapper(&zap_map);
 
-//	for(int i=0; i< all_cands.cands.size(); i++ ){
-//
-//		Candidate c = all_cands.cands[i];
-//
-//		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
-//	}
+	}
 
-	DMDistiller dm_still(args.freq_tol,true);
+	if(args.verbose) cerr << "Found "<< zap_map.size() << " birdies" << endl;
 
-	CandidateCollection distilled_cands;
-	distilled_cands.cands = dm_still.distill(all_cands.cands);
+}
+
+if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap inits");
 
 
-//	for(int i=0; i< distilled_cands.cands.size(); i++ ){
-//
-//		Candidate c = distilled_cands.cands[i];
-//
-//		cerr <<  i << "'= P0: '" << 1/c.freq<< "' F0: '"<< c.freq << "DM: '" << c.dm <<"' nfb: " << c.assoc.size() << " snr:" << c.snr << endl;
-//	}
+/**
+ * Stitch and peasouping section
+ * ******************************
+ * Use the first filter bank to extract header information and create DM and Acceleration trial list that can
+ * be reused for all stitches.
+ */
+
+/**
+ * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
+ */
+Coincidencer* coincidencer = new Coincidencer(args, freq_bin_width/(args.size * ffb->tsamp), max_fanbeam_traversal );
 
 
-	cerr << "Attempting to call coincidencer" << endl;
+vector<float> acc_list;
+AccelerationPlan acc_plan(args.acc_start, args.acc_end, args.acc_tol, args.acc_pulse_width, args.size, tsamp, cfreq, foff);
+acc_plan.generate_accel_list(0.0,acc_list);
+
+vector<float> dm_list;
+Dedisperser ffb_dedisperser(*ffb,1);
+ffb_dedisperser.generate_dm_list(args.dm_start,args.dm_end,args.dm_pulse_width,args.dm_tol);
+dm_list = ffb_dedisperser.get_dm_list();
 
 
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coincidencing");
+/**
+ *
+ * parameters for the xml output file.
+ *
+ */
+stringstream xml_filename;
+xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
+
+OutputFileWriter stats(xml_filename.str());
+stats.add_misc_info();
+stats.add_search_parameters(args);
+stats.add_dm_list(dm_list);
+stats.add_acc_list(acc_list);
 
 
-	coincidencer->init_this_candidates(distilled_cands);
-	coincidencer->send_candidates_to_all_nodes();
-	coincidencer->gather_all_candidates();
-	coincidencer->coincidence();
-	coincidencer->print_shortlisted_candidates();
 
-	ostringstream oss;
-	oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
+if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
 
-	FILE* fp = fopen(oss.str().c_str(),"w");
-	coincidencer->print_shortlisted_candidates(fp);
+vector<int> device_idxs;
+for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
 
-	cerr << endl << " Done." << endl;
+stats.add_gpu_info(device_idxs);
+stats.to_file(xml_filename.str());
+
+if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after peasoup inits");
+
+
+map<int, DispersionTrials<unsigned char> > dedispersed_series_map;
+
+for(vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
+	int fb = (int)*(fb_iterator);
+
+	vivek::Filterbank* f = fanbeams.at(fb);
+
+	Dedisperser dedisperser(*f,1);
+	dedisperser.set_dm_list(dm_list);
+
+	PUSH_NVTX_RANGE("Dedisperse",3)
+	DispersionTrials<unsigned char> trials = dedisperser.dedisperse();
+	POP_NVTX_RANGE
+
+	dedispersed_series_map.insert(map<int, DispersionTrials<unsigned char> >::value_type(fb,trials));
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while dedispersion");
+
+	delete f;
+
+
+}
+
+if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after dedispersion");
+
+
+size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
+int reduced_nsamples = nsamples - max_delay;
+
+CandidateCollection all_cands;
+
+int point_index= 1;
+
+DispersionTrials<unsigned char> stitched_trials = DispersionTrials<unsigned char>(nsamples,tsamp, dm_list,max_delay);
+
+Peasoup peasoup(*ffb, args,stitched_trials, acc_plan, bzap,  all_cands);
+
+unsigned char* previous_data = nullptr;
+
+pthread_t current_peasoup_thread = 0;
+
+for(UniquePoint* point: *unique_points){
+
+	cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
+
+	unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
+
+	stitch_1D(dedispersed_series_map, point, reduced_nsamples, dm_list, data);
+
+	stitched_trials.set_data(data);
+
+	peasoup.set_point(point);
+
+	//peasoup.do_peasoup();
+	if(point_index !=1) {
+
+		int join_return = pthread_join(current_peasoup_thread, NULL);
+
+		if(join_return != 0 ){
+			cerr << "Could not join previous thread. Aborting with ERR NO: " << join_return << endl;
+			exit(EXIT_FAILURE);
+		}
+
+	}
+
+	int create_return = pthread_create(&current_peasoup_thread, NULL, Peasoup::peasoup_thread, (void*) &peasoup);
+
+	if(ErrorChecker::check_pthread_create_error(create_return,"Peasoup thread") == EXIT_FAILURE) exit(EXIT_FAILURE);
+
+	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
+
+
+	delete[] previous_data;
+	previous_data = data;
+
+	point_index++;
+
+}
+
+cerr << "Joining final peasoup" << endl;
+
+int join_return = pthread_join(current_peasoup_thread, NULL);
+
+if(join_return != 0 ){
+	cerr << "Could not join last peasoup thread. Aborting with ERR NO: " << join_return << endl;
+	exit(EXIT_FAILURE);
+}
+
+cerr<<"cleaning up peasoup" << endl;
+delete[] previous_data;
+
+exit(EXIT_SUCCESS);
+cerr << "Done peasouping. Found "<< all_cands.cands.size() << "candidates before local coincidencing" << endl;
+
+DMDistiller dm_still(args.freq_tol,true);
+
+CandidateCollection distilled_cands;
+distilled_cands.cands = dm_still.distill(all_cands.cands);
+
+
+cerr << "Found "<< distilled_cands.cands.size() << "candidates after local coincidencing" << endl;
+
+
+cerr << "Attempting to call global coincidencer" << endl;
+
+
+if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coincidencing");
+
+
+coincidencer->init_this_candidates(distilled_cands);
+coincidencer->send_candidates_to_all_nodes();
+coincidencer->gather_all_candidates();
+coincidencer->coincidence();
+coincidencer->print_shortlisted_candidates();
+
+ostringstream oss;
+oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
+
+FILE* fp = fopen(oss.str().c_str(),"w");
+coincidencer->print_shortlisted_candidates(fp);
+
+cerr << endl << " Done." << endl;
 }
 
 
@@ -479,7 +539,7 @@ void* Peasoup::peasoup_thread(void* ptr){
 
 	Peasoup* peasoup = reinterpret_cast<Peasoup*>(ptr);
 	peasoup->do_peasoup();
-	return NULL;
+	pthread_exit(NULL);
 }
 
 
@@ -806,7 +866,7 @@ void Worker::start(void)
 			std::cerr << "Dereddening Fourier series" << std::endl;
 		rednoise.deredden(d_fseries);
 
-//		cerr << "bzap" << (bzap == NULL) << endl;
+		//		cerr << "bzap" << (bzap == NULL) << endl;
 
 		if (bzap){
 
