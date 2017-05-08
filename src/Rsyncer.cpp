@@ -19,6 +19,16 @@ void Rsyncer::append(string file) {
 
 int Rsyncer::rsync(){
 
+	string command = get_rsync_string();
+
+	if(command.empty()) {
+		cerr << endl << "No files for node: " << node << endl << endl;
+		status = FINISHED;
+		return EXIT_SUCCESS;
+	}
+
+	cerr << endl << "Running the following command for  " << node << ":"<<  command << endl;
+
 	int return_value =  pthread_create(&rsync_thread, NULL, Rsyncer::rsync_files, (void*) this);
 
 	ostringstream oss;
@@ -33,20 +43,15 @@ void* Rsyncer::rsync_files(void* ptr){
 
 	Rsyncer* rsyncer = reinterpret_cast<Rsyncer*>(ptr);
 
-	string command = rsyncer->get_rsync_string();
 
-	if(command.empty()) {
-		cerr << endl << "No files for node: " << rsyncer->node << endl << endl;
+	rsyncer->status = RUNNING;
 
+	if(system(rsyncer->get_rsync_string().c_str()) == EXIT_FAILURE) {
+		cerr << "Problem with RSYNC system call for node: "<< rsyncer->node << " Aborting." << endl;
 		return NULL;
 	}
 
-	cerr << endl << "Running the following command for  " << rsyncer->node << ":"<<  command << endl;
-
-//	if(system(command.c_str()) == EXIT_FAILURE) {
-//		cerr << "Problem with RSYNC system call for node: "<< rsyncer->node << " Aborting." << endl;
-//		return NULL;
-//	}
+	rsyncer->status = FINISHED;
 
 	return NULL;
 }
@@ -56,7 +61,7 @@ std::string Rsyncer::get_rsync_string(){
 	if(this->files.empty()) return "";
 
 	ostringstream oss;
-	oss << "rsync -avRPz --omit-dir-times ";
+	oss << "rsync -aRPz --omit-dir-times ";
 
 	for(string file: this->files) oss << this->node << ":" << file << " ";
 
