@@ -67,6 +67,7 @@ int ConfigManager::load_configs(std::string host, int this_bs){
 
 	if( populate_coincidencer_ports() == EXIT_FAILURE ) return EXIT_FAILURE;
 
+	cerr << "Loaded all config. " << endl;
 
 	return EXIT_SUCCESS;
 
@@ -365,16 +366,18 @@ int ConfigManager::read_mopsr_bs_config(){
 
 	}
 
+
 	bool this_bs_found = false;
 
 	for( auto &kv : other_active_node_bs_map_) {
+
 
 		string host = kv.first;
 		vector<int> bses = kv.second;
 
 		if( std::find(bses.begin(), bses.end(),this_bs_) != bses.end() ){
 
-			if(host != this_host_ ){
+			if(host != this_host_ && this_host_ != edge_node_ ){
 
 				cerr << " BS_" << this_bs_ << " found  in host: " << host << " while expecting at this host: " << this_host_ <<". Aborting now."<< endl;
 				return EXIT_FAILURE;
@@ -395,12 +398,13 @@ int ConfigManager::read_mopsr_bs_config(){
 
 	} else{
 
-		vector<int> bses = other_active_node_bs_map_.at(this_host_);
-		vector<int>::iterator position = std::find(bses.begin(), bses.end(), this_bs_);
-		bses.erase(position);
+			cerr<< "error here. " << endl;
+			vector<int> bses = other_active_node_bs_map_.at(this_host_);
+			vector<int>::iterator position = std::find(bses.begin(), bses.end(), this_bs_);
+			bses.erase(position);
 
-		position = std::find(other_active_bs_.begin(), other_active_bs_.end(), this_bs_);
-		other_active_bs_.erase(position);
+			position = std::find(other_active_bs_.begin(), other_active_bs_.end(), this_bs_);
+			other_active_bs_.erase(position);
 
 	}
 
