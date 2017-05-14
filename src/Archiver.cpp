@@ -37,7 +37,7 @@ void vivek::Archiver::handle_archiver_segfault(int signal){
 	}
 }
 
-int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
+int vivek::Archiver::transfer_fil_to_DADA_buffer(string utc, vivek::Filterbank* f, bool final){
 
 	out_hdu = dada_hdu_create (0);
 
@@ -123,7 +123,7 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 		return EXIT_FAILURE;
 	}
 
-	if (ascii_header_set (header, "FILE_SIZE", "%i", (f->header_bytes + f->data_bytes) )< 0) {
+	if (ascii_header_set (header, "FILE_SIZE", "%i", (16384 + f->data_bytes) )< 0) {
 		std::cerr<< "could not set FILE_SIZE=%i in outgoing header\n" <<std::endl;
 		return EXIT_FAILURE;
 	}
@@ -150,6 +150,11 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 
 	if (ascii_header_set (header, "INSTRUMENT", "%s", "SigProc") < 0){
 		std::cerr<< "could not set INSTRUMENT=SigProc in outgoing header" <<std::endl;
+		return EXIT_FAILURE;
+	}
+
+	if (ascii_header_set (header, "FORMAT", "%s", "SigProc") < 0){
+		std::cerr<< "could not set FORMAT=SigProc in outgoing header" <<std::endl;
 		return EXIT_FAILURE;
 	}
 
@@ -184,65 +189,73 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 	}
 
 	if (ascii_header_set (header, "NBIT", "%d", f->get_value_for_key<int>(NBITS)) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "NBIT =" << f->get_value_for_key<int>(NBITS) <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, "NCHAN", "%d",f->get_value_for_key<int>(NCHANS)) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "could not set NCHAN="<< f->get_value_for_key<int>(NCHANS) << " in outgoing header\n" <<std::endl;
 		return EXIT_FAILURE;
 	}
 
-	MJD mjd = MJD(f->get_value_for_key<double>(TSTART));
-	struct tm date;
-	double fracsec;
+//	MJD mjd = MJD(f->get_value_for_key<double>(TSTART));
+//	struct tm date;
+//	double fracsec;
+//
+//	mjd.gregorian (&date, &fracsec);
+//	std::string utc_string =  mjd.datestr("%Y-%m-%d-%H:%M:%S");
 
-	mjd.gregorian (&date, &fracsec);
-	std::string utc_string =  mjd.datestr("%Y-%m-%d-%H:%M:%S");
-
-	if (ascii_header_set (header, "UTC_START", "%s",utc_string.c_str()) < 0){
-		std::cerr<< "" <<std::endl;
+	if (ascii_header_set (header, "UTC_START", "%s", utc.c_str() ) < 0){
+		std::cerr<< "Could not set UTC_START ="<< utc.c_str() <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, "OBS_OFFSET", "%d",0) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set OBS_OFFSET = 0" <<std::endl;
 		return EXIT_FAILURE;
 	}
 	if (ascii_header_set (header, "NDIM", "%d",1) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set NDIM = 1" <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, "NSAMP", "%ld", f->get_value_for_key<long>(NSAMPLES) ) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set NSAMP ="<<f->get_value_for_key<long>(NSAMPLES)  <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, "STATE", "%s", "Intensity" ) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set STATE = Intensity" <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, CANDIDATE_FILENAME_KEY, "%s", f->get_value_for_key<char*>(CANDIDATE_FILENAME_KEY) ) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set"<< CANDIDATE_FILENAME_KEY <<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	if (ascii_header_set (header, OUT_DIR_KEY, "%s", f->get_value_for_key<char*>(OUT_DIR_KEY)  ) < 0){
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set" << OUT_DIR_KEY << " =" << f->get_value_for_key<char*>(OUT_DIR_KEY)  <<std::endl;
 		return EXIT_FAILURE;
 	}
 
+	if(final) {
+
+		cerr << " Adding " << FINAL_STITCH << " true" << endl;
+
+		if (ascii_header_set (header, FINAL_STITCH, "%s", "true"  ) < 0){
+			std::cerr<< "Could not set"<< FINAL_STITCH << " =true" <<std::endl;
+			return EXIT_FAILURE;
+		}
+	}
 
 	if (ipcbuf_mark_filled (out_hdu->header_block, 16384) < 0)
 	{
-		std::cerr<< "" <<std::endl;
+		std::cerr<< "Could not set IPCBUF MARK FILLED"  <<std::endl;
 		return -1;
 	}
 
-	std::cerr << "wrote headers. Now writing data: " << f->data_bytes <<std::endl;
-
+	fprintf(stderr, "wrote headers. Now writing data: %ld \n", f->data_bytes);
 	uint64_t out_block_id;
 	long bytes_in = 0;
 	long bytes_out = 0;
@@ -261,7 +274,7 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(vivek::Filterbank* f){
 			cerr <<"close: ipcio_close_block_write failed" << endl;
 		}
 
-		std::cerr << "writing data " << bytes_in << " " << ptr <<std::endl;
+		fprintf(stderr, "writing data %ld from %ld \n", bytes_in, ptr);
 		ptr += bytes_in;
 	}
 	std::cerr << "wrote data " <<std::endl;

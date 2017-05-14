@@ -35,6 +35,7 @@
 
 const char* const CANDIDATE_FILENAME_KEY = "CAND_FILE";
 const char* const OUT_DIR_KEY = "FOLD_OUT";
+const char* const FINAL_STITCH = "FINAL_STITCH";
 
 namespace vivek {
 class Archiver;
@@ -50,7 +51,7 @@ public:
 
 	Archiver();
 
-	static int transfer_fil_to_DADA_buffer(vivek::Filterbank* f);
+	static int transfer_fil_to_DADA_buffer(std::string utc, vivek::Filterbank* f, bool final);
 	static void handle_archiver_segfault(int signal);
 
 	virtual ~Archiver();
