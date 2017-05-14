@@ -191,5 +191,7 @@ int hhmmss_to_double (const char * hhmmss, double * degree_value);
 int ddmmss_to_double (const char * ddmmss, double * degree_value);
 
 int get_number_from_server_name(std::string server_name, int* server);
+std::string get_jname_from_pos(std::string ra, std::string dec);
+std::string get_long_jname_from_pos(std::string ra, std::string dec);
 
 #endif /* UTILITYFNS_H_ */
