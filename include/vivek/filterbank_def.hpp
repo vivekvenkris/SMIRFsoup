@@ -30,7 +30,7 @@ const char* const FOFF = "foff";
 const char* const CHANNELBW = "foff";
 
 
-const char* const HEADER_KEYS_FILE ="/home/vivek/workspaces/cuda8_workspace/SMIRFsoup/include/vivek/header_keys.dat";
+const char* const HEADER_KEYS_FILE ="/home/vivek/SMIRF/config/header_keys.dat";
 const char* const INT = "int";
 const char* const DOUBLE = "double";
 const char* const STRING = "string";
