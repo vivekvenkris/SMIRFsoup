@@ -105,7 +105,8 @@ public:
 
 	void print_cand_file(FILE* fo, int index){
 		std::stringstream source_name;
-		source_name << "SMIRF" << "_" << std::setfill('0') << std::setw(3) << index;
+		source_name << "SMIRF" << "_" <<"BS" << std::setfill('0') << std::setw(2) << ConfigManager::this_bs()
+		<< "_" << std::setfill('0') << std::setw(3) << index;
 		fprintf(fo,"%s %s %s %.15f %.2f %.2f %.1f\n",
 				source_name.str().c_str(),ra_str.c_str(),dec_str.c_str(),opt_period,dm,acc,snr);
 
