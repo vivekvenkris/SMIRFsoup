@@ -24,6 +24,8 @@ void* Coincidencer::candidates_client(void* ptr){
 
 		for( const auto &bs_map_pair : host_bs_map_pair.second){
 
+			if(bs_map_pair.first == ConfigManager::this_bs()) continue;
+
 			cerr << " client trying to communicate to " << node << "for BS" << bs_map_pair.first << endl;
 
 			ClientSocket client_socket ( node , ConfigManager::coincidencer_ports().at(node).at(bs_map_pair.first) );
@@ -65,6 +67,7 @@ void* Coincidencer::candidates_server(void* ptr){
 
 	ServerSocket* socket = new ServerSocket( "any" ,ConfigManager::this_coincidencer_port() ) ;
 
+
 	while(true){
 
 		if( ShutdownManager::shutdown_called() ) {
@@ -73,9 +76,32 @@ void* Coincidencer::candidates_server(void* ptr){
 		}
 
 		if(coincidencer->candidate_collection_map.size() == ConfigManager::other_active_bs().size()){
+
 			cerr << "Server got data from all nodes. Quitting server" <<  endl;
 			break;
+
+		} else {
+
+			std::ostringstream oss;
+			oss << "Got candidates from: ";
+
+			if( coincidencer->candidate_collection_map.size() > 0 ){
+
+				for(auto &kv:  coincidencer->candidate_collection_map ){
+					oss << kv.first << " ";
+				}
+
+			}
+			else{
+
+				oss << "None.";
+
+			}
+			oss <<  endl;
+			cerr << oss.str();
 		}
+
+
 
 
 		int waiting_connections = socket->select(5.0);
@@ -104,10 +130,10 @@ void* Coincidencer::candidates_server(void* ptr){
 				iss >> bs_string;
 
 				int bs = -1;
-
+				// BS_<NUMBER> CANDIDATES......
 				size_t position = bs_string.find("_");
 				if(position != bs_string.npos){
-					bs = ::atoi(bs_string.substr(position).c_str());
+					bs = ::atoi(bs_string.substr(position+1).c_str());
 				}
 
 
