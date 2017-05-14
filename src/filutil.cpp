@@ -18,10 +18,13 @@
 vivek::Filterbank::Filterbank(std::string file_name, std::string mode, bool verbose)
  	 	 	 	 	 	 	 	 	 :file_name(file_name),verbose(verbose),mode(mode){
 
-	if(mode == VIRTUALFIL) return;
+	read_header_keys();
+	if(mode == VIRTUALFIL) {
+		std::cerr<< "Created virtual filterbank. " << std::endl;
+		return;
+	}
 	file_open(&file, file_name.c_str(),mode.c_str());
 	if(this->verbose) std::cerr<< "Opening file:" << file_name <<  " in " << mode <<" mode."<< std::endl;
-	read_header_keys();
 	if(mode ==FILREAD){
 		int header_size =  read_header();
 		if(!(header_size)){
@@ -40,8 +43,7 @@ vivek::Filterbank::~Filterbank(){
 	for(std::vector<vivek::HeaderParamBase*>::iterator it = header_params.begin(); it != header_params.end(); ++it) delete *it;
 
 	delete[] data;
-
-	fclose(file);
+	if(mode !=VIRTUALFIL) fclose(file);
 
 }
 
@@ -182,13 +184,12 @@ int vivek::Filterbank::store_data(unsigned char* data, unsigned long start_sampl
 	unsigned long bytes_to_copy = num_samples* nchans* nifs;
 	unsigned long byte_to_start = start_sample*nchans*nifs;
 
-	if(this->verbose) std::cerr<< " have:" <<data_bytes << " copying " <<bytes_to_copy << " from:" << byte_to_start ;
+	if(this->verbose) fprintf(stderr, "have = %ld copying = %ld  from byte = %ld \n", this->data_bytes , bytes_to_copy, byte_to_start);
 
 	std::memcpy(&this->data[data_bytes],&data[byte_to_start],sizeof(unsigned char)*bytes_to_copy);
 	data_bytes +=bytes_to_copy;
 
-	if(this->verbose) std::cerr<< "  new data_bytes:" <<data_bytes <<std::endl;
-
+	if(this->verbose) fprintf(stderr, "new data_bytes: %ld \n", data_bytes);
 	return EXIT_SUCCESS;
 }
 
@@ -305,7 +306,7 @@ int vivek::Filterbank::read_header(){
 }
 
 int vivek::Filterbank::write_header(){
-	if(mode !=  std::string((char*)FILWRITE)){
+	if(mode !=  std::string((char*)FILWRITE) || mode !=  std::string((char*)VIRTUALFIL)){
 		std::cerr<<" File not opened in write mode aborting now. " << std::endl;
 		return EXIT_FAILURE;
 	}

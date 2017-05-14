@@ -111,8 +111,9 @@ public:
 
 	static int copy_header(Filterbank* from, Filterbank* to, bool verbose){
 
-		if(to->mode!=FILWRITE){
+		if(to->mode == std::string((char*)FILREAD) ){
 			std::cerr << "Unable to write to Filterbank"<< to->file_name << "Reason: Filterbank read only.";
+			return EXIT_FAILURE;
 		}
 
 		if(verbose) std::cerr<< "Attempting to copy header from:" << from->file_name << " to: " << to->file_name <<std::endl;
@@ -176,7 +177,14 @@ public:
 	float get_nchans(void){return (float)nchans;}
 	void set_nchans(unsigned int nchans){this->nchans = nchans;}
 	unsigned int get_nsamps(void){return (unsigned int)nsamps;}
-	void set_nsamps(unsigned int nsamps){this->nsamps = nsamps;}
+	void set_nsamps(unsigned int nsamps){
+		this->nsamps = nsamps;
+		set_value_for_key(NSAMPLES,nsamps);
+		if(this->mode == FILREAD) {
+		this->data_bytes = nsamps * this->nchans * this->get_value_for_key<int>(NIFS) * this->nbits / 8.0;
+		}
+		fprintf(stderr, " setting nsamples = %ld and data_bytes = %ld", this->nsamps, this->data_bytes );
+	}
 	int get_nbits(void){return (int)nbits;}
 	void set_nbits(unsigned char nbits){this->nbits = nbits;}
 	unsigned char* get_data(void){return this->data;}
