@@ -36,6 +36,7 @@ int ConfigManager::this_coincidencer_port_ = -1;
 /* Node that processes all points that pass from one node to another. */
 std::string ConfigManager::edge_node_ = "";
 int ConfigManager::edge_bs_ = -1;
+unsigned long ConfigManager::fft_size_ = 0;
 
 
 std::string ConfigManager::smirf_base_ = "";
@@ -398,7 +399,6 @@ int ConfigManager::read_mopsr_bs_config(){
 
 	} else{
 
-			cerr<< "error here. " << endl;
 			vector<int> bses = other_active_node_bs_map_.at(this_host_);
 			vector<int>::iterator position = std::find(bses.begin(), bses.end(), this_bs_);
 			bses.erase(position);
@@ -435,6 +435,23 @@ int ConfigManager::read_mopsr_bs_config(){
 
 	}
 	this_gpu_device_ = 0;
+
+
+	if (ascii_header_get (bs_config , "BLOCK_BUFSZ_0", "%ld", &shared_mem_buffer_size_) != 1) {
+
+		cerr<< "Cannot read " << "BLOCK_BUFSZ_0" << " from file: " << config_file << endl;
+		return EXIT_FAILURE;
+
+	}
+
+	if (ascii_header_get (bs_config , "BLOCK_NBUFS_0", "%ld", &shared_mem_nbuffers_) != 1) {
+
+		cerr<< "Cannot read " << "BLOCK_BUFSZ_0" << " from file: " << config_file << endl;
+		return EXIT_FAILURE;
+
+	}
+
+
 
 	cerr << "Using GPU device: " << this_gpu_device_ << endl;
 
@@ -567,6 +584,16 @@ int ConfigManager::read_smirf_config(){
 	}
 
 	ConfigManager::beam_dir_prefix_ = string(beam_dir_prefix);
+
+
+	if (ascii_header_get (smirf_config , "FFT_SIZE", "%ld", &fft_size_) != 1) {
+
+			cerr<< "Cannot read " << "FFT_SIZE" << " from file: " << SMIRF_CFG << endl;
+			return EXIT_FAILURE;
+
+	}
+
+	cerr << "FFT SIZE to be used: " << fft_size_ << "samples" << endl;
 
 
 	return EXIT_SUCCESS;

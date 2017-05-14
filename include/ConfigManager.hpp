@@ -65,6 +65,7 @@ private:
 
 	static unsigned int shared_mem_nbuffers_;
 	static unsigned long shared_mem_buffer_size_;
+	static unsigned long fft_size_;
 
 	static int read_smirf_config();
 	static int read_mopsr_bp_config();
@@ -96,6 +97,7 @@ public:
 
 	static const unsigned int  shared_mem_nbuffers() { return shared_mem_nbuffers_;}
 	static const unsigned long shared_mem_buffer_size() { return shared_mem_buffer_size_; }
+	static const unsigned long fft_size() { return fft_size_;}
 
 	static int load_configs(std::string host_name, int this_bs);
 	static std::string get_fil_file_path(std::string base, std::string utc, int fanbeam);
