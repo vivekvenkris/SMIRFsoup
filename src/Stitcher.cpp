@@ -16,7 +16,7 @@ Stitcher::~Stitcher() {
 
 }
 
-string get_candidate_file_name( string dir, int point_idx, std::string host){
+string get_candidate_file_name( string dir, int point_idx){
 
 	stringstream stream;
 	stream << dir << PATH_SEPERATOR << CANDIDATE_FILENAME_PREFIX;
@@ -24,10 +24,31 @@ string get_candidate_file_name( string dir, int point_idx, std::string host){
 	if(point_idx != -1)
 		stream << "_" <<setfill('0') << setw(4) << point_idx;
 
-	stream << "." << host.substr(0,host.find("."));
+	stream 	<< "."
+			<< "BS"
+			<< std::setfill('0')
+	<< std::setw(2)
+	<< ConfigManager::this_bs();
 
 	return stream.str();
 }
+
+
+string get_candidate_file_dir( string root_dir, string ra, string dec){
+
+	stringstream stream;
+	stream << root_dir << PATH_SEPERATOR << get_long_jname_from_pos(ra,dec);
+
+	stream 	<< "."
+			<< "BS"
+			<< std::setfill('0')
+	<< std::setw(2)
+	<< ConfigManager::this_bs();
+
+	return stream.str();
+}
+
+
 
 
 vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterbank*>* fanbeams){
@@ -40,8 +61,9 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 	if(args.verbose) cerr<< "output file name:" << out <<endl;
 
 
-	vivek::Filterbank* stitched_filterbank = new vivek::Filterbank(out, FILWRITE, args.verbose);
+	vivek::Filterbank* stitched_filterbank = new vivek::Filterbank(out, VIRTUALFIL, args.verbose);
 	vivek::Filterbank::copy_header(fanbeams->begin()->second,stitched_filterbank,args.verbose);
+	stitched_filterbank->set_nsamps(ConfigManager::fft_size());
 
 	double sigproc_dej, sigproc_raj;
 	hhmmss_to_sigproc(point->ra.c_str(),&sigproc_raj);
@@ -67,10 +89,10 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 		cerr << f->file_name << endl;
 		stitched_filterbank->store_data(f->data, traversal->startSample, traversal->numSamples);
 
-		if(traversal_num  == last_traversal ) {
-			cerr << "last extra bits: from "<< (traversal->startSample + traversal->numSamples) << " " << f->nsamps - (traversal->startSample + traversal->numSamples);
-			stitched_filterbank->store_data(f->data, traversal->startSample + traversal->numSamples, f->nsamps - (traversal->startSample + traversal->numSamples));
-		}
+		//		if(traversal_num  == last_traversal ) {
+		//			cerr << "last extra bits: from "<< (traversal->startSample + traversal->numSamples) << " " << f->nsamps - (traversal->startSample + traversal->numSamples);
+		//			stitched_filterbank->store_data(f->data, traversal->startSample + traversal->numSamples, f->nsamps - (traversal->startSample + traversal->numSamples));
+		//		}
 
 	}
 
@@ -110,7 +132,7 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point){
 
 		cerr<< "mean: " << f->get_mean() << "  rms:" << f->get_rms() <<endl;
 
-		fanbeams[fb] = f;
+		fanbeams.insert(map<int,vivek::Filterbank*>::value_type(fb,f));
 
 	}
 
@@ -143,7 +165,7 @@ int Stitcher::stitch_and_dump(vector<UniquePoint*>* uniqPoints, vector<int>* uni
 
 		if(args.verbose) cerr<< "mean: " << f->get_mean() << "  rms:" << f->get_rms() <<endl;
 
-		fanbeams[fb] = f;
+		fanbeams.insert(map<int,vivek::Filterbank*>::value_type(fb,f));
 
 	}
 	cerr<< "loaded all FB" << fanbeams.size()<<endl;
@@ -175,7 +197,7 @@ int Stitcher::stitch_and_dump(vector<UniquePoint*>* uniqPoints, vector<int>* uni
 int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_key,
 		string candidates_file, string dspsr_out_dir){
 
-	std::signal(SIGSEGV, vivek::Archiver::handle_archiver_segfault);
+	// std::signal(SIGSEGV, vivek::Archiver::handle_archiver_segfault);
 	vivek::Archiver::out_key =  out_key;
 	vivek::Archiver::nbuffers = ConfigManager::shared_mem_nbuffers();
 	vivek::Archiver::buffer_size = ConfigManager::shared_mem_buffer_size();
@@ -194,8 +216,9 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 
 	int line_number = 1;
 
-	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it ,line_number++){
+	map<UniquePoint*, vector<string> > points_with_candidates;
 
+	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it ,line_number++){
 		UniquePoint* point = *points_it;
 
 		string ra = point->ra;
@@ -203,25 +226,49 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 
 		vector<string> candidates;
 
-
 		for( vector<string>::iterator lines_it = lines.begin(); lines_it != lines.end(); ++lines_it ) {
 
 			string line = *lines_it;
-
 			if( line.find(ra)!= line.npos && line.find(dec)!= line.npos ){
-				candidates.push_back(line);
+
+				string source, ra, dec;
+				float period, dm, acceleration, snr;
+
+				stringstream ss;
+				ss << line;
+				ss >> source >> ra >> dec  >> period >>  dm >> acceleration >> snr;
+
+				if(	period > 0 && snr > 10 )
+					candidates.push_back(line);
+
+
 			}
+		}
+
+		cerr<< "Point " << get_long_jname_from_pos(point->ra, point->dec) << " has " << candidates.size() << " >10 sigma candidates" <<  endl;
+
+		if(!candidates.empty()){
+
+			points_with_candidates.insert(map<UniquePoint*, vector<string> >::value_type(point,candidates));
 
 		}
 
-		cerr << "point: " << point->ra << " " << point->dec <<  " has "<< candidates.size() << " candidates" << endl;
+	}
 
-		if(candidates.empty()) 	continue;
+	cerr << points_with_candidates.size() << " points have candidates" << endl;
 
-		for( string s: candidates) cerr << s << endl;
+	int point_number = 1;
+
+	for(auto &kv: points_with_candidates){
+
+		UniquePoint* point = kv.first;
+		vector<string> candidates = kv.second;
+
+		cerr << "Candidates for point: (" << point_number <<") " << get_long_jname_from_pos(point->ra, point->dec) << ":" << endl;
+		for( string s: candidates) cerr << "\t" << s << endl;
 
 
-		string file_name = get_candidate_file_name(args.out_dir, line_number, args.host).c_str();
+		string file_name = get_candidate_file_name(args.out_dir, line_number).c_str();
 
 		cerr << "Writing candidate file: " << file_name << " for dspsr." << endl;
 
@@ -257,15 +304,24 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 		}
 
 		stitched_filterbank->add_to_header(CANDIDATE_FILENAME_KEY,STRING,file_name);
-		stitched_filterbank->add_to_header(OUT_DIR_KEY,STRING,dspsr_out_dir);
+		stitched_filterbank->add_to_header(OUT_DIR_KEY,STRING,get_candidate_file_dir(dspsr_out_dir,point->ra, point->dec));
 
-		vivek::Archiver::transfer_fil_to_DADA_buffer(stitched_filterbank);
+		bool final = false;
+		if( point_number == points_with_candidates.size() ) {
+
+			cerr << "Processing final point" << endl;
+			final = true;
+
+		}
+
+		vivek::Archiver::transfer_fil_to_DADA_buffer(args.utc,stitched_filterbank, final);
 
 
 
 		//stitched_filterbank->unload_filterbank();
 
 		delete stitched_filterbank;
+		point_number++;
 
 	}
 
