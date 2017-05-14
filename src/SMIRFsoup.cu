@@ -80,15 +80,10 @@ int main(int argc, char **argv) {
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
 
-
-
 	/**
 	 * Get and populate uniq points file.
 	 */
-	stringstream smirf_utc_dir_stream;
-	smirf_utc_dir_stream << args.smirf_base << PATH_SEPERATOR <<args.utc;
 
-	if(args.uniq_points_dir == "") args.uniq_points_dir = smirf_utc_dir_stream.str();
 
 	stringstream abs_uniq_points_file_name;
 	abs_uniq_points_file_name << args.uniq_points_dir<< PATH_SEPERATOR <<args.uniq_points_file;
@@ -106,91 +101,6 @@ int main(int argc, char **argv) {
 
 	cerr << "Successfully loaded unique points file." << endl;
 
-	if(ConfigManager::this_host() == ConfigManager::edge_node()){
-
-		cerr << "Filterbanks have to be rsynced before start" << endl;
-
-		vector<Rsyncer> rsyncers;
-
-		for( pair< string, map < int, pair< int, int> > > node_bp_map_pair : ConfigManager::node_bp_bs_fb_map() ){
-			string node = node_bp_map_pair.first;
-
-			if(node == ConfigManager::edge_node() ) continue;
-
-			Rsyncer rsyncer(node);
-
-
-			for(int fb : *unique_fbs) {
-
-				for(pair<int, pair<int,int> > bp_fb_pair: node_bp_map_pair.second) {
-
-					int min = bp_fb_pair.second.first;
-					int max =  bp_fb_pair.second.second;
-					if(fb >= min && fb<=max) {
-						string path = ConfigManager::get_fil_file_path(args.archives_base,args.utc, fb);
-						rsyncer.append(path);
-					}
-
-				}
-
-			}
-			rsyncers.push_back(rsyncer);
-
-		}
-
-		for(Rsyncer r: rsyncers) cerr << endl << r.getNode() << " ---- " << r.get_rsync_string() << endl;
-
-		int num_active = rsyncers.size();
-
-		cerr << "Starting " << num_active << "rsyncs" <<  endl;
-
-		for(Rsyncer r: rsyncers){
-
-			r.rsync();
-			pthread_join(r.getRsyncThread(),NULL);
-		}
-
-
-
-
-//		while(num_active != 0) {
-//
-//			rsyncers.erase( std::remove_if(rsyncers.begin(), rsyncers.end(), [](const Rsyncer & r) {
-//
-//				if( ShutdownManager::shutdown_called() ){
-//
-//					if(r.get_status()  == RUNNING){
-//
-//						cerr << "trying to kill rsync to " << r.getNode() << endl;
-//						pthread_kill(r.getRsyncThread(),SIGKILL);
-//						return true;
-//					}
-//				}
-//
-//				if( ! r.is_running()) {
-//					cerr << "joining rsync for node" << r.getNode() << endl;
-//					pthread_join(r.getRsyncThread(),NULL);
-//					return true;
-//				}
-//				return false; }),
-//
-//				rsyncers.end()
-//			);
-//
-//			num_active = rsyncers.size();
-//
-//			cerr << "Number of active rsyncs: " << num_active << endl;
-//
-//			sleep(2);
-//
-//
-//		}
-
-
-	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after rsyncing filterbanks");
-
-
-}
 
 /**
  * If dump or transfer mode, do and return. Do not peasoup.
@@ -238,11 +148,11 @@ if(args.dump_mode || args.transfer_mode){
 			vector<UniquePoint*> points;
 			points.push_back(unique_points->at(args.point_num));
 
-			stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "fold_out");
+			stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "cars");
 
 		}
 
-		stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "fold_out");
+		stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "cars");
 
 
 	}
@@ -272,7 +182,7 @@ for( vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != uni
 	vivek::Filterbank* f = new vivek::Filterbank(fb_abs_path, FILREAD, args.verbose);
 	f->load_all_data();
 
-	fanbeams[fb] = f;
+	fanbeams.insert(std::map<int,vivek::Filterbank*>::value_type(fb,f));
 
 
 	if( ShutdownManager::shutdown_called() ) {
@@ -388,24 +298,24 @@ dm_list = ffb_dedisperser.get_dm_list();
  * parameters for the xml output file.
  *
  */
-stringstream xml_filename;
-xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
+//stringstream xml_filename;
+//xml_filename <<  args.out_dir << PATH_SEPERATOR <<  args.utc << ".xml";
+//
+//OutputFileWriter stats(xml_filename.str());
+//stats.add_misc_info();
+//stats.add_search_parameters(args);
+//stats.add_dm_list(dm_list);
+//stats.add_acc_list(acc_list);
 
-OutputFileWriter stats(xml_filename.str());
-stats.add_misc_info();
-stats.add_search_parameters(args);
-stats.add_dm_list(dm_list);
-stats.add_acc_list(acc_list);
 
+//
+//if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
+//
+//vector<int> device_idxs;
+//for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
 
-
-if(args.out_suffix !="") xml_filename<<"."<<args.out_suffix;
-
-vector<int> device_idxs;
-for (int device_idx=0;device_idx<1;device_idx++) device_idxs.push_back(device_idx);
-
-stats.add_gpu_info(device_idxs);
-stats.to_file(xml_filename.str());
+//stats.add_gpu_info(device_idxs);
+//stats.to_file(xml_filename.str());
 
 if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after peasoup inits");
 
@@ -439,11 +349,13 @@ if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after dedisp
 size_t max_delay = dedispersed_series_map.begin()->second.get_max_delay();
 int reduced_nsamples = nsamples - max_delay;
 
+//cerr << "nsamps: " <<nsamples << " max DM delay: " << max_delay << " Reduced samples: " << reduced_nsamples << endl;
+
 CandidateCollection all_cands;
 
 int point_index= 1;
 
-DispersionTrials<unsigned char> stitched_trials = DispersionTrials<unsigned char>(nsamples,tsamp, dm_list,max_delay);
+DispersionTrials<unsigned char> stitched_trials = DispersionTrials<unsigned char>(ConfigManager::fft_size(),tsamp, dm_list,max_delay);
 
 Peasoup peasoup(*ffb, args,stitched_trials, acc_plan, bzap,  all_cands);
 
@@ -455,29 +367,32 @@ for(UniquePoint* point: *unique_points){
 
 	cerr<< " Processing point " <<  point_index << " / " <<  unique_points->size() << endl;
 
-	unsigned char* data = new_and_check<unsigned char>(dm_list.size()*reduced_nsamples,"tracked data.");
+	unsigned char* data = new_and_check<unsigned char>(dm_list.size()*ConfigManager::fft_size(),"tracked data.");
 
-	stitch_1D(dedispersed_series_map, point, reduced_nsamples, dm_list, data);
+	stitch_1D(dedispersed_series_map, point, ConfigManager::fft_size(), dm_list, data);
+
+
+//	if(point_index !=1) {
+//		cerr << "Waiting for peasoup..." << endl;
+//		int join_return = pthread_join(current_peasoup_thread, NULL);
+//
+//		if(join_return != 0 ){
+//			cerr << "Could not join previous thread. Aborting with ERR NO: " << join_return << endl;
+//			exit(EXIT_FAILURE);
+//		}
+//
+//	}
+
 
 	stitched_trials.set_data(data);
 
 	peasoup.set_point(point);
 
-	//peasoup.do_peasoup();
-	if(point_index !=1) {
+	peasoup.do_peasoup();
 
-		int join_return = pthread_join(current_peasoup_thread, NULL);
+//	int create_return = pthread_create(&current_peasoup_thread, NULL, Peasoup::peasoup_thread, (void*) &peasoup);
 
-		if(join_return != 0 ){
-			cerr << "Could not join previous thread. Aborting with ERR NO: " << join_return << endl;
-			exit(EXIT_FAILURE);
-		}
-
-	}
-
-	int create_return = pthread_create(&current_peasoup_thread, NULL, Peasoup::peasoup_thread, (void*) &peasoup);
-
-	if(ErrorChecker::check_pthread_create_error(create_return,"Peasoup thread") == EXIT_FAILURE) exit(EXIT_FAILURE);
+	//if(ErrorChecker::check_pthread_create_error(create_return,"Peasoup thread") == EXIT_FAILURE) exit(EXIT_FAILURE);
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("while peasouping");
 
@@ -491,18 +406,24 @@ for(UniquePoint* point: *unique_points){
 
 cerr << "Joining final peasoup" << endl;
 
-int join_return = pthread_join(current_peasoup_thread, NULL);
-
-if(join_return != 0 ){
-	cerr << "Could not join last peasoup thread. Aborting with ERR NO: " << join_return << endl;
-	exit(EXIT_FAILURE);
-}
+//int join_return = pthread_join(current_peasoup_thread, NULL);
+//
+//if(join_return != 0 ){
+//	cerr << "Could not join last peasoup thread. Aborting with ERR NO: " << join_return << endl;
+//	exit(EXIT_FAILURE);
+//}
 
 cerr<<"cleaning up peasoup" << endl;
 delete[] previous_data;
 
-exit(EXIT_SUCCESS);
+//exit(EXIT_SUCCESS);
 cerr << "Done peasouping. Found "<< all_cands.cands.size() << "candidates before local coincidencing" << endl;
+
+for(Candidate c: all_cands.cands){
+
+	cerr << c.ra_str << " " << c.dec_str << " " << 1/c.freq << " " << c.dm << " " << c.snr <<  " " << c.folded_snr<< endl;
+
+}
 
 DMDistiller dm_still(args.freq_tol,true);
 
@@ -519,11 +440,15 @@ cerr << "Attempting to call global coincidencer" << endl;
 if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coincidencing");
 
 
+
+
 coincidencer->init_this_candidates(distilled_cands);
 coincidencer->send_candidates_to_all_nodes();
 coincidencer->gather_all_candidates();
 coincidencer->coincidence();
 coincidencer->print_shortlisted_candidates();
+
+
 
 ostringstream oss;
 oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
@@ -531,7 +456,25 @@ oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
 FILE* fp = fopen(oss.str().c_str(),"w");
 coincidencer->print_shortlisted_candidates(fp);
 
-cerr << endl << " Done." << endl;
+cerr << endl << " SMIRFsouping Done." << endl;
+
+cerr << endl << "Writing obs.processing in " << args.smirf_utc_dir << endl;
+
+
+ostringstream processing_file_name;
+processing_file_name << args.smirf_utc_dir << PATH_SEPERATOR << "obs.processing";
+
+fstream processing_file;
+processing_file.open(processing_file_name.str().c_str(),fstream::out);
+
+if(!processing_file.is_open()){
+	cerr << "Could not touch obs.processing. Aborting"<< endl;
+	exit(EXIT_FAILURE);
+}
+
+processing_file.close();
+
+
 }
 
 
@@ -589,7 +532,11 @@ void stitch_1D( map<int, DispersionTrials<unsigned char> >& dedispersed_series_m
 
 	int ptr = 0;
 
-	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++){
+	int last_traversal = point->traversals->size() - 1;
+	int traversal_num = 0;
+
+
+	for(vector<Traversal*>::iterator it2 = point->traversals->begin(); it2!=point->traversals->end(); it2++, traversal_num++){
 		Traversal* traversal = *it2;
 
 		int startSample = traversal->startSample;
@@ -611,6 +558,8 @@ void stitch_1D( map<int, DispersionTrials<unsigned char> >& dedispersed_series_m
 			trialIndex+= reduced_nsamples;
 
 		}
+
+
 
 		ptr+=num;
 		if(ptr >= reduced_nsamples) break;
@@ -776,13 +725,13 @@ int populate_unique_points(std::string abs_file_name, std::vector<UniquePoint*>*
 
 
 
-int transfer_to_shared_memory(void* ptr){
-	vivek::Filterbank* stitched_filterbank = reinterpret_cast<vivek::Filterbank*>(ptr);
-	vivek::Archiver* a = new vivek::Archiver();
-	a->transfer_fil_to_DADA_buffer(stitched_filterbank);
-	return EXIT_SUCCESS;
-
-}
+//int transfer_to_shared_memory(void* ptr){
+//	vivek::Filterbank* stitched_filterbank = reinterpret_cast<vivek::Filterbank*>(ptr);
+//	vivek::Archiver* a = new vivek::Archiver();
+//	a->transfer_fil_to_DADA_buffer(stitched_filterbank,false);
+//	return EXIT_SUCCESS;
+//
+//}
 
 void* launch_worker_thread(void* ptr){
 	reinterpret_cast<Worker*>(ptr)->start();
@@ -917,12 +866,16 @@ void Worker::start(void)
 				std::cerr << "Finding peaks" << std::endl;
 			SpectrumCandidates trial_cands(tim.get_dm(),ii,acc_list[jj]);
 
+
+
 			if (args.verbose)
 				std::cerr << "SpectrumCandidates" << std::endl;
 			cand_finder.find_candidates(pspec,trial_cands);
 			if (args.verbose)
 				std::cerr << "after pspec" << sums.size() << std::endl;
 			cand_finder.find_candidates(sums,trial_cands);
+
+
 
 			CandidateCollection updated_candidates;
 			for(Candidate c: trial_cands.cands){
