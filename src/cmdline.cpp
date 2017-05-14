@@ -143,7 +143,7 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 		TCLAP::ValueArg<std::string> arg_uniq_pts_dir("U", "uniq_pts_dir"," Directory to find unique points file default: SMIRF_BASE/<utc>/", false, "", "string",cmd);
 
 		TCLAP::ValueArg<std::string> arg_candidates_file("c", "candidates_file", " Coincidenced candidate file name to use with -T option",
-				false, "candidates.shortlisted", "string",cmd);
+				false, "", "string",cmd);
 
 		TCLAP::ValueArg<std::string> arg_candidates_dir("C", "candidates_dir"," Directory to find candidates file",false, "", "string",cmd);
 
@@ -305,14 +305,16 @@ int organize(CmdLineOptions& args){
 
 	if(args.uniq_points_file.empty()) {
 		std::ostringstream oss;
-		oss << args.utc << "." << args.host << ".pts";
+		oss << args.utc << ".BS" << std::setfill('0') << std::setw(2) << args.beam_searcher_id << ".pts";
 		args.uniq_points_file = oss.str();
 	}
 
 	if(args.candidates_file.empty()){
 		std::ostringstream oss;
-		oss << args.utc << ".shortlisted." << args.host << ".cands";
+		oss << args.utc << ".shortlisted.BS" << std::setfill('0') << std::setw(2) << args.beam_searcher_id;
 		args.candidates_file = oss.str();
 	}
+
+	return EXIT_SUCCESS;
 
 }
