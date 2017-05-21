@@ -61,6 +61,8 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(string utc, vivek::Filterbank* 
 		return -1;
 	}
 
+	header[0] = '\0';
+
 	//	for(std::vector<vivek::HeaderParamBase*>::iterator it = f->header_params.begin(); it != f->header_params.end(); ++it) {
 	//		vivek::HeaderParamBase* base = *it;
 	//		const char* key = base->key.c_str();
@@ -241,12 +243,22 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(string utc, vivek::Filterbank* 
 
 	if(final) {
 
-		cerr << " Adding " << FINAL_STITCH << " true" << endl;
+		cerr << " Adding " << FINAL_STITCH << " true" <<  " for "<< f->get_value_for_key<char*>(CANDIDATE_FILENAME_KEY)   << endl;
 
 		if (ascii_header_set (header, FINAL_STITCH, "%s", "true"  ) < 0){
 			std::cerr<< "Could not set"<< FINAL_STITCH << " =true" <<std::endl;
 			return EXIT_FAILURE;
 		}
+	}
+	else{
+
+		cerr << " Adding " << FINAL_STITCH << " false" <<  " for "<< f->get_value_for_key<char*>(CANDIDATE_FILENAME_KEY)   << endl;
+
+		if (ascii_header_set (header, FINAL_STITCH, "%s", "false"  ) < 0){
+			std::cerr<< "Could not set"<< FINAL_STITCH << " =false" <<std::endl;
+			return EXIT_FAILURE;
+		}
+
 	}
 
 	if (ipcbuf_mark_filled (out_hdu->header_block, 16384) < 0)
@@ -255,7 +267,7 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(string utc, vivek::Filterbank* 
 		return -1;
 	}
 
-	fprintf(stderr, "wrote headers. Now writing data: %ld \n", f->data_bytes);
+	fprintf(stderr, "wrote headers. Now writing data bytes: %ld \n", f->data_bytes);
 	uint64_t out_block_id;
 	long bytes_in = 0;
 	long bytes_out = 0;
@@ -274,7 +286,7 @@ int vivek::Archiver::transfer_fil_to_DADA_buffer(string utc, vivek::Filterbank* 
 			cerr <<"close: ipcio_close_block_write failed" << endl;
 		}
 
-		fprintf(stderr, "writing data %ld from %ld \n", bytes_in, ptr);
+		// fprintf(stderr, "writing data %ld from %ld \n", bytes_in, ptr);
 		ptr += bytes_in;
 	}
 	std::cerr << "wrote data " <<std::endl;
