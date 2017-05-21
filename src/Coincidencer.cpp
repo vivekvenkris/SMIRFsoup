@@ -14,6 +14,8 @@ using namespace std;
 
 void* Coincidencer::candidates_client(void* ptr){
 
+	cerr << "Started coincidencer client " <<  endl;
+
 	Coincidencer*  coincidencer = reinterpret_cast< Coincidencer* >(ptr);
 
 	cerr << "Coincidencer Client:: Sending " << coincidencer->this_candidates.cands.size() << "candidates to all other nodes." << endl;
@@ -37,7 +39,7 @@ void* Coincidencer::candidates_client(void* ptr){
 
 			if( ShutdownManager::shutdown_called() ) {
 				cerr << "Coincidencer client terminating on shutdown call. " << endl;
-				return NULL;
+				pthread_exit(NULL);
 			}
 
 		}
@@ -47,7 +49,7 @@ void* Coincidencer::candidates_client(void* ptr){
 
 	cerr << "Client sent data to everyone. " <<  endl;
 
-	return NULL;
+	pthread_exit(NULL);
 }
 
 
@@ -139,7 +141,7 @@ void* Coincidencer::candidates_server(void* ptr){
 
 				if(bs < 0) {
 					cerr << "Incorrect BS string received: " <<  bs_string << ". Expected format is BS_<num>. Quitting server" << endl;
-					return NULL;
+					pthread_exit(NULL);
 				}
 
 				CandidateCollection cc;
@@ -152,6 +154,9 @@ void* Coincidencer::candidates_server(void* ptr){
 
 			} catch (SocketException& e) {
 
+				cerr<< "Exception in coincidencer server: " << e.description() << endl;
+				pthread_exit(NULL);
+
 			}
 
 		}
@@ -159,10 +164,16 @@ void* Coincidencer::candidates_server(void* ptr){
 	}
 
 
-	return NULL;
+	pthread_exit(NULL);
 }
 
 int Coincidencer::send_candidates_to_all_nodes(){
+
+	if(args.no_global_coincidence) {
+		cerr << "Global coincidencing disabled. exiting now without sending." << endl;
+		return EXIT_SUCCESS;
+	}
+
 	int start_client = pthread_create(&client, NULL, Coincidencer::candidates_client, (void*) this);
 	return ErrorChecker::check_pthread_create_error(start_client, "Coincidencer send_candidates_to_all_nodes -- starting client");
 
@@ -170,11 +181,16 @@ int Coincidencer::send_candidates_to_all_nodes(){
 
 int Coincidencer::gather_all_candidates(){
 
-	cerr << "Waiting for the server to get all candidates." << endl;
-	pthread_join(server,NULL);
+	if(args.no_global_coincidence) {
+		cerr << "Global coincidencing disabled. exiting now without joining. " << endl;
+		return EXIT_SUCCESS;
+	}
 
 	cerr << "Waiting for client to send all candidates." << endl;
 	pthread_join(client,NULL);
+
+	cerr << "Waiting for the server to get all candidates." << endl;
+	pthread_join(server,NULL);
 
 
 	return EXIT_SUCCESS;
@@ -225,6 +241,13 @@ void Coincidencer::print_shortlisted_candidates(FILE* fo){
 
 	fprintf(fo,"SOURCE RA DEC PERIOD DM ACC SNR\n");
 	shortlisted_candidates.print_cand_file(fo,0);
+
+}
+
+void Coincidencer::print_shortlisted_candidates_more(FILE* fo){
+
+	fprintf(fo,"SOURCE RA DEC PERIOD DM ACC SNR FOLDED_SNR NH\n");
+	shortlisted_candidates.print_cand_file_more(fo,0);
 
 }
 

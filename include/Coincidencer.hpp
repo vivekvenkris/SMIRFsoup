@@ -63,8 +63,10 @@ public:
 
 	Coincidencer(CmdLineOptions& args, double bin_width, int max_fanbeam_traversal):args(args),bin_width(bin_width),max_fanbeam_traversal(max_fanbeam_traversal) {
 
-		int start_server = pthread_create(&server, NULL, Coincidencer::candidates_server, (void*) this);
-		ErrorChecker::check_pthread_create_error(start_server, "Coincidencer constructor -- starting server");
+		if(! args.no_global_coincidence) {
+			int start_server = pthread_create(&server, NULL, Coincidencer::candidates_server, (void*) this);
+			ErrorChecker::check_pthread_create_error(start_server, "Coincidencer constructor -- starting server");
+		}
 
 	}
 
@@ -75,6 +77,7 @@ public:
 	int gather_all_candidates();
 
 	void print_shortlisted_candidates(FILE* fo=stderr);
+	void print_shortlisted_candidates_more(FILE* fo=stderr);
 
 	int coincidence();
 
