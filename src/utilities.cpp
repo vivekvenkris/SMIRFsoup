@@ -63,7 +63,7 @@ int  file_open(FILE** file, const char* absolutename, const char* mode) {
 	if (!*file) {
 
 		cerr<< "could not open '" << absolutename << "' in mode '"
-				<< mode << "' Errorno: " << strerror(errno) << endl;
+				<< mode << "' Error: " << strerror(errno) << endl;
 
 		return EXIT_FAILURE;
 	}
