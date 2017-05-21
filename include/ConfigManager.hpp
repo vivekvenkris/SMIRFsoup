@@ -100,8 +100,8 @@ public:
 	static const unsigned long fft_size() { return fft_size_;}
 
 	static int load_configs(std::string host_name, int this_bs);
-	static std::string get_fil_file_path(std::string base, std::string utc, int fanbeam);
-	static std::string get_fil_file_path(std::string base, std::string utc, int fanbeam, std::string host);
+	static std::string get_fil_file_path(std::string base, std::string utc, int fanbeam,bool is_no_bp_structure);
+	static std::string get_fil_file_path(std::string base, std::string utc, int fanbeam, std::string host, bool is_no_bp_structure);
 
 
 

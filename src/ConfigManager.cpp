@@ -399,12 +399,12 @@ int ConfigManager::read_mopsr_bs_config(){
 
 	} else{
 
-			vector<int> bses = other_active_node_bs_map_.at(this_host_);
-			vector<int>::iterator position = std::find(bses.begin(), bses.end(), this_bs_);
-			bses.erase(position);
+		vector<int> bses = other_active_node_bs_map_.at(this_host_);
+		vector<int>::iterator position = std::find(bses.begin(), bses.end(), this_bs_);
+		bses.erase(position);
 
-			position = std::find(other_active_bs_.begin(), other_active_bs_.end(), this_bs_);
-			other_active_bs_.erase(position);
+		position = std::find(other_active_bs_.begin(), other_active_bs_.end(), this_bs_);
+		other_active_bs_.erase(position);
 
 	}
 
@@ -588,8 +588,8 @@ int ConfigManager::read_smirf_config(){
 
 	if (ascii_header_get (smirf_config , "FFT_SIZE", "%ld", &fft_size_) != 1) {
 
-			cerr<< "Cannot read " << "FFT_SIZE" << " from file: " << SMIRF_CFG << endl;
-			return EXIT_FAILURE;
+		cerr<< "Cannot read " << "FFT_SIZE" << " from file: " << SMIRF_CFG << endl;
+		return EXIT_FAILURE;
 
 	}
 
@@ -603,13 +603,13 @@ int ConfigManager::read_smirf_config(){
 /**
  *  Format:  BASE_ARCHIVES_DIR/BP??/<UTC>/FB/BEAM_???/<UTC>.fil
  */
-string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam){
-	return get_fil_file_path(base,utc,fanbeam,ConfigManager::this_host_);
+string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam, bool is_no_bp_structure){
+	return get_fil_file_path(base,utc,fanbeam,ConfigManager::this_host_, is_no_bp_structure);
 }
 
 
 
-string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam, string host){
+string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam, string host, bool is_no_bp_structure){
 
 	map<int, pair<int,int> > beam_map = node_bp_bs_fb_map_.at(host);
 
@@ -622,24 +622,30 @@ string ConfigManager::get_fil_file_path(string base,string utc, int fanbeam, str
 		if(fanbeam >= values.first && fanbeam <= values.second){
 
 			stringstream root;
+
 			root 	<< base
-					<< PATH_SEPERATOR
-					<< beam_processor_prefix_
+					<< PATH_SEPERATOR;
+
+			if(!is_no_bp_structure) {
+
+			root 	<< beam_processor_prefix_
 					<< std::setfill('0')
-			<< std::setw(2)
-			<< bp
-			<< PATH_SEPERATOR
-			<< utc
-			<< PATH_SEPERATOR
-			<< fb_dir_
-			<< PATH_SEPERATOR
-			<< beam_dir_prefix_
-			<< std::setfill('0')
-			<< std::setw(3)
-			<< fanbeam
-			<< PATH_SEPERATOR
-			<< utc
-			<< ".fil";
+					<< std::setw(2)
+					<< bp
+					<< PATH_SEPERATOR;
+			}
+
+			root 	<< utc
+					<< PATH_SEPERATOR
+					<< fb_dir_
+					<< PATH_SEPERATOR
+					<< beam_dir_prefix_
+					<< std::setfill('0')
+					<< std::setw(3)
+					<< fanbeam
+					<< PATH_SEPERATOR
+					<< utc
+					<< ".fil";
 
 			return root.str();
 
