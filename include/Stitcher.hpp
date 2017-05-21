@@ -47,8 +47,8 @@ public:
 
 	virtual ~Stitcher();
 
-	vivek::Filterbank* stitch(UniquePoint* point, std::map<int,vivek::Filterbank*>* fanbeams);
-	vivek::Filterbank* stitch(UniquePoint* point);
+	vivek::Filterbank* stitch(UniquePoint* point, std::map<int,vivek::Filterbank*>* fanbeams, bool virtual_fil);
+	vivek::Filterbank* stitch(UniquePoint* point, bool virtual_fil);
 
 	int stitch_and_dump(std::vector<UniquePoint*>* points, std::vector<int>* uniqFBs);
 	int stitch_and_transfer(std::vector<UniquePoint*>* points, key_t out_key, std::string candidates_file, std::string dspsr_out_dir);

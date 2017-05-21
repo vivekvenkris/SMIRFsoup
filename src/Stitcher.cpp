@@ -51,7 +51,7 @@ string get_candidate_file_dir( string root_dir, string ra, string dec){
 
 
 
-vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterbank*>* fanbeams){
+vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterbank*>* fanbeams, bool virtual_fil){
 
 
 	stringstream name_stream;
@@ -60,10 +60,15 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 
 	if(args.verbose) cerr<< "output file name:" << out <<endl;
 
-
-	vivek::Filterbank* stitched_filterbank = new vivek::Filterbank(out, VIRTUALFIL, args.verbose);
+	const char* mode = virtual_fil? VIRTUALFIL : FILWRITE;
+	vivek::Filterbank* stitched_filterbank = new vivek::Filterbank(out, mode, args.verbose);
 	vivek::Filterbank::copy_header(fanbeams->begin()->second,stitched_filterbank,args.verbose);
-	stitched_filterbank->set_nsamps(ConfigManager::fft_size());
+
+	if(virtual_fil) {
+		cerr << "Setting nsamp to FFT size. " << endl;
+		stitched_filterbank->set_nsamps(ConfigManager::fft_size());
+	}
+
 
 	double sigproc_dej, sigproc_raj;
 	hhmmss_to_sigproc(point->ra.c_str(),&sigproc_raj);
@@ -96,6 +101,11 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 
 	}
 
+	if(virtual_fil) {
+		cerr << "Setting nsamp to FFT size. " << endl;
+		stitched_filterbank->set_nsamps(stitched_filterbank->data_bytes * 1.0/stitched_filterbank->nchans);
+	}
+
 
 	cerr<< "mean: " << stitched_filterbank->get_mean() << "  rms:" << stitched_filterbank->get_rms() <<endl;
 
@@ -103,7 +113,7 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point, map<int,vivek::Filterban
 
 }
 
-vivek::Filterbank* Stitcher::stitch(UniquePoint* point){
+vivek::Filterbank* Stitcher::stitch(UniquePoint* point, bool virtual_fil){
 
 	vector<int> uniqFBs;
 	for(vector<Traversal*>::iterator it = point->traversals->begin(); it!=point->traversals->end(); it++){
@@ -120,7 +130,7 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point){
 	for( vector<int>::iterator fbIterator = uniqFBs.begin(); fbIterator != uniqFBs.end(); fbIterator++){
 		int fb = (int)*(fbIterator);
 
-		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
+		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb,args.no_bp_structure );
 
 		if(fb_abs_path.empty()) {
 			cerr<< "Problem loading fb: " <<  fb << "fil file not found. Aborting now.";
@@ -136,7 +146,7 @@ vivek::Filterbank* Stitcher::stitch(UniquePoint* point){
 
 	}
 
-	vivek::Filterbank* stitched_filterbank = stitch(point,&fanbeams);
+	vivek::Filterbank* stitched_filterbank = stitch(point,&fanbeams, virtual_fil);
 
 	for (map<int,vivek::Filterbank*>::iterator it=fanbeams.begin(); it!=fanbeams.end(); ++it) delete it->second;
 
@@ -153,7 +163,7 @@ int Stitcher::stitch_and_dump(vector<UniquePoint*>* uniqPoints, vector<int>* uni
 	for( vector<int>::iterator fbIterator = uniqFBs->begin(); fbIterator != uniqFBs->end(); fbIterator++){
 		int fb = (int)*(fbIterator);
 
-		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
+		string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb, args.no_bp_structure);
 
 		if(fb_abs_path.empty()) {
 			cerr<< "Problem loading fb: " <<  fb << "fil file not found. Aborting now.";
@@ -175,9 +185,11 @@ int Stitcher::stitch_and_dump(vector<UniquePoint*>* uniqPoints, vector<int>* uni
 
 		UniquePoint* point = *upIterator;
 
-		vivek::Filterbank* stitched_filterbank = stitch(point,&fanbeams);
+		vivek::Filterbank* stitched_filterbank = stitch(point,&fanbeams,false);
 
 		if(stitched_filterbank == nullptr) return EXIT_FAILURE;
+
+		cerr << "Unloading filterbank.." << endl;
 
 		stitched_filterbank->unload_filterbank();
 
@@ -214,11 +226,11 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 
 	for(string line : lines) if(line.find("SOURCE") != line.npos)  header = line;
 
-	int line_number = 1;
+//	int line_number = 1;
 
 	map<UniquePoint*, vector<string> > points_with_candidates;
 
-	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it ,line_number++){
+	for(vector<UniquePoint*>::iterator points_it = uniqPoints->begin(); points_it!=uniqPoints->end();++points_it ){
 		UniquePoint* point = *points_it;
 
 		string ra = point->ra;
@@ -232,13 +244,13 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 			if( line.find(ra)!= line.npos && line.find(dec)!= line.npos ){
 
 				string source, ra, dec;
-				float period, dm, acceleration, snr;
+				float period, dm, acceleration, snr,folded_snr,nh;
 
 				stringstream ss;
 				ss << line;
-				ss >> source >> ra >> dec  >> period >>  dm >> acceleration >> snr;
+				ss >> source >> ra >> dec  >> period >>  dm >> acceleration >> snr >> folded_snr >> nh;
 
-				if(	period > 0 && snr > 10 )
+				if(	period > 0 && snr >= 9.5 && folded_snr > 0)
 					candidates.push_back(line);
 
 
@@ -268,8 +280,7 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 		for( string s: candidates) cerr << "\t" << s << endl;
 
 
-		string file_name = get_candidate_file_name(args.out_dir, line_number).c_str();
-
+		string file_name = get_candidate_file_name(args.out_dir, point_number).c_str();
 		cerr << "Writing candidate file: " << file_name << " for dspsr." << endl;
 
 		ofstream candidates_file_stream(file_name.c_str() , ofstream::out);
@@ -294,9 +305,7 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 			return EXIT_FAILURE;
 		}
 
-
-
-		vivek::Filterbank* stitched_filterbank = stitch(point);
+		vivek::Filterbank* stitched_filterbank = stitch(point, true);
 
 		if(stitched_filterbank == nullptr) {
 			cerr << "Problem creating stitched filterbank." << endl;
@@ -314,11 +323,10 @@ int Stitcher::stitch_and_transfer(vector<UniquePoint*>* uniqPoints, key_t out_ke
 
 		}
 
-		vivek::Archiver::transfer_fil_to_DADA_buffer(args.utc,stitched_filterbank, final);
+		int result = vivek::Archiver::transfer_fil_to_DADA_buffer(args.utc,stitched_filterbank, final);
 
+		if(result != EXIT_SUCCESS ) return EXIT_FAILURE;
 
-
-		//stitched_filterbank->unload_filterbank();
 
 		delete stitched_filterbank;
 		point_number++;

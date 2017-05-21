@@ -19,12 +19,16 @@ vivek::Filterbank::Filterbank(std::string file_name, std::string mode, bool verb
  	 	 	 	 	 	 	 	 	 :file_name(file_name),verbose(verbose),mode(mode){
 
 	read_header_keys();
+
 	if(mode == VIRTUALFIL) {
 		std::cerr<< "Created virtual filterbank. " << std::endl;
 		return;
 	}
-	file_open(&file, file_name.c_str(),mode.c_str());
+
+	if (file_open(&file, file_name.c_str(),mode.c_str()) != EXIT_SUCCESS) exit(EXIT_FAILURE);
+
 	if(this->verbose) std::cerr<< "Opening file:" << file_name <<  " in " << mode <<" mode."<< std::endl;
+
 	if(mode ==FILREAD){
 		int header_size =  read_header();
 		if(!(header_size)){
@@ -306,7 +310,7 @@ int vivek::Filterbank::read_header(){
 }
 
 int vivek::Filterbank::write_header(){
-	if(mode !=  std::string((char*)FILWRITE) || mode !=  std::string((char*)VIRTUALFIL)){
+	if(mode !=  std::string((char*)FILWRITE) && mode !=  std::string((char*)VIRTUALFIL)){
 		std::cerr<<" File not opened in write mode aborting now. " << std::endl;
 		return EXIT_FAILURE;
 	}
