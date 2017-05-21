@@ -99,7 +99,7 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 
 		TCLAP::ValueArg<float> arg_max_freq("", "max_freq",
 				"Highest Fourier freqency to consider. (default= 1100)",
-				false, 1100.0, "float",cmd);
+				false, 800.0, "float",cmd);
 
 		TCLAP::ValueArg<int> arg_max_harm("", "max_harm_match",
 				"Maximum harmonic for related candidates. (default= 4)",
@@ -145,6 +145,10 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 		TCLAP::ValueArg<std::string> arg_candidates_file("c", "candidates_file", " Coincidenced candidate file name to use with -T option",
 				false, "", "string",cmd);
 
+		TCLAP::SwitchArg arg_no_coincidence("X", "no_coincidence", "Do not coincidence", cmd);
+		TCLAP::SwitchArg arg_no_bp_structure("N", "no_bp_structure", "Do not use BP directory structure", cmd);
+
+
 		TCLAP::ValueArg<std::string> arg_candidates_dir("C", "candidates_dir"," Directory to find candidates file",false, "", "string",cmd);
 
 		TCLAP::ValueArg<std::string> arg_dada_key("k", "dada_key", " shared memory key for the -T option", false, "", "string",cmd);
@@ -153,6 +157,9 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 
 		TCLAP::ValueArg<int> arg_beam_searcher_name("b", "bs_id", " give Beam Searcher name (Molonglo backend specific) eg: BS_0", false, -1, "int",cmd);
 
+		TCLAP::ValueArg<std::string> arg_filterbank("f", "filterbank", " give a single filterbank to process", false, "", "string",cmd);
+
+		TCLAP::SwitchArg arg_low_res("L", "low_res", "scale for low_res filterbank", cmd);
 
 
 		cmd.parse(argc, argv);
@@ -208,6 +215,14 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 
 		args.beam_searcher_id  = arg_beam_searcher_name.getValue();
 
+		args.no_global_coincidence = arg_no_coincidence.getValue();
+
+		args.no_bp_structure = arg_no_bp_structure.getValue();
+
+		args.filterbank = arg_filterbank.getValue();
+
+		args.low_res = arg_low_res.getValue();
+
 		if( args.beam_searcher_id == -1){
 			std::cerr << " Please provide a Beam Searcher ID with the -b option. Aborting now." <<std::endl;
 			return EXIT_FAILURE;
@@ -229,8 +244,8 @@ int read_cmdline_options(CmdLineOptions& args, int argc, char **argv)
 		}
 		args.host = args.host.substr(0,args.host.find("."));
 
-		if(args.utc.empty()){
-			std::cerr << " Please provide a UTC with the -i option. Aborting now." <<std::endl;
+		if(args.utc.empty() && args.filterbank.empty()){
+			std::cerr << " Please provide a UTC or Filterbank with the -i & -f option. Aborting now." <<std::endl;
 			return EXIT_FAILURE;
 		}
 

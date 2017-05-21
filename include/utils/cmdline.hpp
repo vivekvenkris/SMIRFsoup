@@ -73,6 +73,14 @@ struct CmdLineOptions {
 
   int beam_searcher_id;
 
+  bool no_global_coincidence;
+
+  bool no_bp_structure;
+
+  std::string filterbank;
+
+ bool low_res;
+
 
 
 
