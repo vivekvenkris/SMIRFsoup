@@ -107,10 +107,19 @@ public:
 		std::stringstream source_name;
 		source_name << "SMIRF" << "_" <<"BS" << std::setfill('0') << std::setw(2) << ConfigManager::this_bs()
 		<< "_" << std::setfill('0') << std::setw(3) << index;
-		fprintf(fo,"%s %s %s %.15f %.2f %.2f %.1f\n",
+		fprintf(fo,"%s %s %s %.15f %.2f %.2f %.2f\n",
 				source_name.str().c_str(),ra_str.c_str(),dec_str.c_str(),opt_period,dm,acc,snr);
 
 	}
+
+	void print_cand_file_more(FILE* fo, int index){
+			std::stringstream source_name;
+			source_name << "SMIRF" << "_" <<"BS" << std::setfill('0') << std::setw(2) << ConfigManager::this_bs()
+			<< "_" << std::setfill('0') << std::setw(3) << index;
+			fprintf(fo,"%s %s %s %.15f %.2f %.2f %.2f %.2f %.1f \n",
+					source_name.str().c_str(),ra_str.c_str(),dec_str.c_str(),opt_period,dm,acc,snr,folded_snr,nh*1.0);
+
+		}
 
 
 	friend std::istringstream& operator>> (std::istringstream &in, Candidate& a);
@@ -247,6 +256,11 @@ public:
 		for (int ii=0;ii<cands.size();ii++)
 			cands[ii].print_cand_file(fo,candidate_id+ii);
 
+	}
+
+	void print_cand_file_more(FILE* fo,int candidate_id){
+		for (int ii=0;ii<cands.size();ii++)
+				cands[ii].print_cand_file_more(fo,candidate_id+ii);
 	}
 
 	void generate_candidate_binaries(std::string output_directory="./") {
