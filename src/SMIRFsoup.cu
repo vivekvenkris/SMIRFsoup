@@ -81,6 +81,72 @@ int main(int argc, char **argv) {
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after loading config");
 
 	/**
+	 *
+	 * If Single filterbank mode, peasoup and return
+	 *
+	 */
+
+		if(!args.filterbank.empty()){
+
+			cerr << "In single filterbank mode" << endl;
+
+			vivek::Filterbank* f = new vivek::Filterbank(args.filterbank,FILREAD,args.verbose);
+			f->load_all_data();
+
+			cerr << "Setting size to " << Utils::prev_power_of_two(f->get_nsamps()) << endl;
+
+			args.size = Utils::prev_power_of_two(f->get_nsamps());
+
+			vector<float> acc_list;
+			AccelerationPlan acc_plan(args.acc_start, args.acc_end, args.acc_tol, args.acc_pulse_width, args.size,
+					f->get_tsamp(), f->get_cfreq(), f->get_foff());
+			acc_plan.generate_accel_list(0.0,acc_list);
+
+			vector<float> dm_list;
+			Dedisperser dedisperser(*f,1);
+			dedisperser.generate_dm_list(args.dm_start,args.dm_end,args.dm_pulse_width,args.dm_tol);
+			dm_list = dedisperser.get_dm_list();
+
+
+			PUSH_NVTX_RANGE("Dedisperse",3)
+			DispersionTrials<unsigned char> dispersion_trials = dedisperser.dedisperse();
+			POP_NVTX_RANGE
+
+			cerr << "Dedispersed." << endl;
+
+			CandidateCollection all_cands;
+			Peasoup peasoup(*f, args,dispersion_trials, acc_plan, nullptr , all_cands);
+			UniquePoint* point = new UniquePoint();
+
+			char ra[100];
+			sigproc_to_hhmmss(f->get_value_for_key<double>(SRC_RAJ),&ra[0]);
+
+			char dec[100];
+			sigproc_to_ddmmss(f->get_value_for_key<double>(SRC_DEJ),&dec[0]);
+
+			point->ra = ra;
+			point->dec = dec;
+			point->startFanbeam = 0;
+			point->endFanbeam = 0;
+			point->startNS = 0;
+			point->endNS = 0;
+
+			peasoup.set_point(point);
+
+			peasoup.do_peasoup();
+
+			all_cands.print_cand_file(stderr,0);
+
+			delete f;
+
+			exit(EXIT_SUCCESS);
+
+		}
+
+
+
+
+	/**
 	 * Get and populate uniq points file.
 	 */
 
@@ -148,16 +214,18 @@ if(args.dump_mode || args.transfer_mode){
 			vector<UniquePoint*> points;
 			points.push_back(unique_points->at(args.point_num));
 
-			stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "cars");
+			if ( stitcher.stitch_and_transfer(&points,args.out_key, candidate_file, "cars") != EXIT_SUCCESS ) exit(EXIT_FAILURE);
 
 		}
 
-		stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "cars");
+		return  stitcher.stitch_and_transfer(unique_points,args.out_key, candidate_file, "cars");
 
 
 	}
 	return EXIT_SUCCESS;
 }
+
+
 
 
 /**
@@ -172,7 +240,7 @@ std::map<int,vivek::Filterbank*> fanbeams;
 for( vector<int>::iterator fb_iterator = unique_fbs->begin(); fb_iterator != unique_fbs->end(); fb_iterator++){
 	int fb = (int)*(fb_iterator);
 
-	string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb);
+	string fb_abs_path = ConfigManager::get_fil_file_path(args.archives_base,args.utc,fb, args.no_bp_structure);
 
 	if(fb_abs_path.empty()) {
 		cerr<< "Problem loading fb: " <<  fb << " fil file not found. Aborting now.";
@@ -211,6 +279,20 @@ double cfreq = ffb -> get_cfreq();
 double foff =  ffb -> get_foff();
 
 if(args.size ==0) args.size = Utils::prev_power_of_two(ffb->get_nsamps());
+
+if(nsamples < ConfigManager::fft_size()){
+
+	cerr << "Need atleast " <<  ConfigManager::fft_size() << " samples to run. Had only " << nsamples << ". Aborting"  <<  endl;
+	exit(EXIT_FAILURE);
+
+}
+
+
+/**
+ * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
+ */
+Coincidencer* coincidencer = new Coincidencer(args, freq_bin_width/(args.size * ffb->tsamp), max_fanbeam_traversal );
+
 
 
 
@@ -265,6 +347,18 @@ if(args.dynamic_birdies) {
 
 	if(args.verbose) cerr << "Found "<< zap_map.size() << " birdies" << endl;
 
+	ostringstream birdies_file;
+
+	birdies_file << args.smirf_utc_dir << PATH_SEPERATOR << args.utc << ".birdies.BS" <<setfill('0') << setw(2) << ConfigManager::this_bs();
+
+	cerr << "Writing birdies list to: " << birdies_file.str() << endl;
+
+	FILE* birdies_file_pointer = fopen(birdies_file.str().c_str(),"w");
+
+	for(Candidate c: zero_dm_candidates.cands) fprintf(birdies_file_pointer,"%.8f %.8f %.6f %d \n", 1/c.freq , c.freq, bin_width, c.assoc.size() );
+
+	fclose(birdies_file_pointer);
+
 }
 
 if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap inits");
@@ -277,10 +371,6 @@ if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown("after zap in
  * be reused for all stitches.
  */
 
-/**
- * Create the coincidencer. This creates the server that can get candidates whenever other nodes are done peasouping.
- */
-Coincidencer* coincidencer = new Coincidencer(args, freq_bin_width/(args.size * ffb->tsamp), max_fanbeam_traversal );
 
 
 vector<float> acc_list;
@@ -419,11 +509,11 @@ delete[] previous_data;
 //exit(EXIT_SUCCESS);
 cerr << "Done peasouping. Found "<< all_cands.cands.size() << "candidates before local coincidencing" << endl;
 
-for(Candidate c: all_cands.cands){
-
-	cerr << c.ra_str << " " << c.dec_str << " " << 1/c.freq << " " << c.dm << " " << c.snr <<  " " << c.folded_snr<< endl;
-
-}
+//for(Candidate c: all_cands.cands){
+//
+//	cerr << c.ra_str << " " << c.dec_str << " " << 1/c.freq << " " << c.dm << " " << c.snr <<  " " << c.folded_snr<< endl;
+//
+//}
 
 DMDistiller dm_still(args.freq_tol,true);
 
@@ -443,7 +533,10 @@ if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" before coin
 
 
 coincidencer->init_this_candidates(distilled_cands);
-coincidencer->send_candidates_to_all_nodes();
+if ( coincidencer->send_candidates_to_all_nodes() == EXIT_FAILURE){
+	cerr << "Problem sending candidates to other nodes. Aborting now";
+	exit(EXIT_FAILURE);
+}
 coincidencer->gather_all_candidates();
 coincidencer->coincidence();
 coincidencer->print_shortlisted_candidates();
@@ -454,9 +547,19 @@ ostringstream oss;
 oss << args.candidates_dir << PATH_SEPERATOR << args.candidates_file;
 
 FILE* fp = fopen(oss.str().c_str(),"w");
-coincidencer->print_shortlisted_candidates(fp);
+coincidencer->print_shortlisted_candidates_more(fp);
 
-cerr << endl << " SMIRFsouping Done." << endl;
+fclose(fp);
+
+oss << ".more";
+
+FILE* fp2 = fopen(oss.str().c_str(),"w");
+coincidencer->print_shortlisted_candidates_more(fp2);
+
+fclose(fp2);
+
+
+cerr << endl << " SMIRFsouping Done for utc" << args.utc << endl;
 
 cerr << endl << "Writing obs.processing in " << args.smirf_utc_dir << endl;
 
@@ -497,6 +600,7 @@ void Peasoup::do_peasoup(){
 	Worker* worker = new Worker(trials,dispenser,acc_plan,args,args.size, bzap, point);
 	worker->start();
 	dm_cands.append(worker->dm_trial_cands.cands);
+
 
 	if( ShutdownManager::shutdown_called() ) ShutdownManager::shutdown(" While souping");
 
@@ -878,6 +982,7 @@ void Worker::start(void)
 
 
 			CandidateCollection updated_candidates;
+
 			for(Candidate c: trial_cands.cands){
 
 				c.ra_str = point->ra;
