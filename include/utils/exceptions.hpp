@@ -40,6 +40,9 @@ public:
 
 	  }
 
+	  std::cerr << " Pthread failed with error no:"  << pthread_return_value << " and error message: "
+			  << error_message.str()<< std::endl;
+
 	  return EXIT_FAILURE;
 
 
